@@ -1,14 +1,10 @@
-# Simple single-stage build for MediaWarn
+# Minimal MediaWarn package - Python NLP service + Frontend
 FROM ubuntu:22.04
 
-# Install all dependencies at once
+# Install dependencies
 RUN apt-get update && apt-get install -y \
     # System tools
     curl wget git ca-certificates \
-    # Go dependencies
-    golang-go \
-    # Node.js and npm
-    nodejs npm \
     # Python and pip
     python3 python3-pip \
     # Runtime dependencies
@@ -19,10 +15,14 @@ RUN apt-get update && apt-get install -y \
 # Set working directory
 WORKDIR /app
 
-# Copy all source code
-COPY . .
+# Copy source code
+COPY nlp/ ./nlp/
+COPY config/ ./config/
 
-# Build frontend (simple static version)
+# Install Python dependencies
+RUN pip3 install --no-cache-dir -r nlp/requirements.txt
+
+# Build static frontend
 RUN mkdir -p /app/frontend-build && \
     cat > /app/frontend-build/index.html << 'EOF'
 <!DOCTYPE html>
@@ -32,77 +32,172 @@ RUN mkdir -p /app/frontend-build && \
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>MediaWarn - Content Warning Scanner</title>
     <style>
-        body { font-family: Arial, sans-serif; margin: 40px; background: #f5f5f5; }
-        .container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        h1 { color: #333; margin-bottom: 20px; }
-        .status { padding: 15px; margin: 20px 0; border-radius: 4px; }
-        .info { background: #e7f3ff; border-left: 4px solid #2196F3; }
-        .api-link { color: #2196F3; text-decoration: none; }
-        .api-link:hover { text-decoration: underline; }
-        code { background: #f4f4f4; padding: 2px 6px; border-radius: 3px; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+            margin: 0; 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .container { 
+            max-width: 900px; 
+            margin: 20px;
+            background: white; 
+            padding: 40px; 
+            border-radius: 16px; 
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+        }
+        h1 { 
+            color: #333; 
+            margin-bottom: 10px; 
+            font-size: 2.5em;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 1.2em;
+        }
+        .status { 
+            padding: 20px; 
+            margin: 30px 0; 
+            border-radius: 8px; 
+            border-left: 5px solid #4CAF50;
+        }
+        .info { 
+            background: #f0f8ff; 
+            border-left-color: #2196F3; 
+        }
+        .warning {
+            background: #fff8e1;
+            border-left-color: #ff9800;
+        }
+        .api-link { 
+            color: #2196F3; 
+            text-decoration: none; 
+            font-weight: 500;
+        }
+        .api-link:hover { 
+            text-decoration: underline; 
+        }
+        code { 
+            background: #f8f9fa; 
+            padding: 4px 8px; 
+            border-radius: 4px; 
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 0.9em;
+        }
+        .endpoint-list {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        .endpoint-list ul {
+            margin: 0;
+            padding-left: 20px;
+        }
+        .endpoint-list li {
+            margin: 8px 0;
+        }
+        .setup-steps {
+            background: #f0f8ff;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid #2196F3;
+        }
+        .setup-steps ol {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+        .setup-steps li {
+            margin: 10px 0;
+            line-height: 1.6;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+            color: #666;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>🛡️ MediaWarn</h1>
-        <p>Privacy-focused content warning scanner for media files</p>
+        <p class="subtitle">Privacy-focused content warning scanner for media files</p>
         
         <div class="status info">
-            <strong>Service Status:</strong> MediaWarn backend services are running
+            <strong>🟢 Service Status:</strong> MediaWarn NLP service is running<br>
+            <small>Full API and scanner services coming soon</small>
         </div>
         
-        <h2>API Access</h2>
-        <p>Access the REST API at: <a href="/api" class="api-link">http://localhost:8000/api</a></p>
+        <div class="status warning">
+            <strong>⚠️ Note:</strong> This is a minimal deployment with NLP processing capabilities. 
+            The full scanner and API services are being added in future updates.
+        </div>
         
-        <h2>Available Endpoints</h2>
-        <ul>
-            <li><code>GET /api/scan/status</code> - Get current scan status</li>
-            <li><code>POST /api/scan/start</code> - Start scanning</li>
-            <li><code>GET /api/results</code> - List scan results</li>
-            <li><code>GET /api/stats/overview</code> - Get overview statistics</li>
-        </ul>
+        <h2>🔗 Available Services</h2>
+        <div class="endpoint-list">
+            <ul>
+                <li><strong>NLP Processing:</strong> Content analysis engine running on port 8001</li>
+                <li><strong>Web Interface:</strong> This status page on port 7219</li>
+                <li><strong>Configuration:</strong> Service configuration via environment variables</li>
+            </ul>
+        </div>
         
-        <h2>Setup</h2>
-        <ol>
-            <li>Configure your media directories in the Docker compose file</li>
-            <li>Start scanning via the API</li>
-            <li>Monitor results through the API endpoints</li>
-        </ol>
+        <h2>⚙️ Configuration</h2>
+        <div class="setup-steps">
+            <strong>Environment Variables:</strong>
+            <ul>
+                <li><code>DATABASE_URL</code> - PostgreSQL connection string</li>
+                <li><code>REDIS_URL</code> - Redis connection string</li>
+                <li><code>NLP_WORKERS</code> - Number of NLP worker processes (default: 2)</li>
+                <li><code>MODEL_CACHE</code> - Directory for ML model cache</li>
+            </ul>
+        </div>
         
-        <p><em>MediaWarn provides complete privacy-focused content analysis.</em></p>
+        <h2>🚀 Quick Start</h2>
+        <div class="setup-steps">
+            <ol>
+                <li>Configure your database and Redis connections</li>
+                <li>Mount your media directories in the Docker container</li>
+                <li>Start the container: <code>docker run -d -p 7219:7219 -p 8001:8001 mediawarn</code></li>
+                <li>Access this interface at <a href="http://localhost:7219" class="api-link">http://localhost:7219</a></li>
+            </ol>
+        </div>
+
+        <h2>📋 Service Modes</h2>
+        <div class="endpoint-list">
+            <p>Set the <code>SERVICE</code> environment variable:</p>
+            <ul>
+                <li><code>nlp</code> - Run NLP processing service only</li>
+                <li><code>frontend</code> - Run web interface only</li>
+                <li><code>all</code> - Run all available services (default)</li>
+            </ul>
+        </div>
+        
+        <div class="footer">
+            <p><strong>MediaWarn</strong> - Complete privacy protection with local processing</p>
+            <p><em>Version 1.0 - Minimal NLP Service Package</em></p>
+        </div>
     </div>
 </body>
 </html>
 EOF
 
-# Install Python dependencies
-RUN pip3 install --no-cache-dir -r nlp/requirements.txt
-
-# Build Go services (one at a time with error checking and verbose output)
-RUN echo "Building scanner..." && \
-    cd scanner && \
-    echo "Go version: $(go version)" && \
-    echo "Go mod tidy..." && \
-    go mod tidy -v && \
-    echo "Go build scanner..." && \
-    go build -v -x -o /app/bin/scanner ./cmd/main.go && \
-    echo "Scanner built successfully"
-
-RUN echo "Building API..." && \
-    cd api && \
-    echo "Go mod tidy..." && \
-    go mod tidy -v && \
-    echo "Go build API..." && \
-    go build -v -x -o /app/bin/api ./main.go && \
-    echo "API built successfully"
-
 # Create startup script
-RUN mkdir -p /app/bin && \
-    cat > /app/start.sh << 'EOF'
+RUN cat > /app/start.sh << 'EOF'
 #!/bin/bash
 set -e
 
-echo "Starting MediaWarn services..."
+echo "Starting MediaWarn Minimal Services..."
 
 # Wait for dependencies
 if [ ! -z "$DATABASE_URL" ]; then
@@ -114,14 +209,6 @@ fi
 
 # Start services based on SERVICE environment variable
 case "${SERVICE:-all}" in
-    scanner)
-        echo "Starting Scanner service..."
-        exec /app/bin/scanner
-        ;;
-    api)
-        echo "Starting API service..."
-        exec /app/bin/api
-        ;;
     nlp)
         echo "Starting NLP worker..."
         cd /app && exec python3 -m nlp.main
@@ -132,7 +219,7 @@ case "${SERVICE:-all}" in
         exec nginx -g "daemon off;"
         ;;
     all|*)
-        echo "Starting all services with supervisor..."
+        echo "Starting NLP service and frontend with supervisor..."
         # Configure supervisor
         cat > /etc/supervisor/conf.d/mediawarn.conf << 'SUPERVISOR_EOF'
 [supervisord]
@@ -140,22 +227,6 @@ nodaemon=true
 user=root
 logfile=/var/log/supervisor/supervisord.log
 pidfile=/var/run/supervisord.pid
-
-[program:scanner]
-command=/app/bin/scanner
-directory=/app
-autostart=true
-autorestart=true
-stderr_logfile=/var/log/supervisor/scanner.err.log
-stdout_logfile=/var/log/supervisor/scanner.out.log
-
-[program:api]
-command=/app/bin/api
-directory=/app
-autostart=true
-autorestart=true
-stderr_logfile=/var/log/supervisor/api.err.log
-stdout_logfile=/var/log/supervisor/api.out.log
 
 [program:nlp]
 command=python3 -m nlp.main
@@ -173,7 +244,7 @@ stderr_logfile=/var/log/supervisor/nginx.err.log
 stdout_logfile=/var/log/supervisor/nginx.out.log
 SUPERVISOR_EOF
 
-        # Create nginx directories and start supervisor
+        # Create directories and start supervisor
         mkdir -p /var/www/html /var/log/supervisor /run/nginx
         exec supervisord -c /etc/supervisor/conf.d/mediawarn.conf
         ;;
@@ -186,15 +257,13 @@ RUN chmod +x /app/start.sh
 RUN mkdir -p /models /var/log/supervisor /var/www/html
 
 # Expose ports
-EXPOSE 7219 8000 8001
+EXPOSE 7219 8001
 
 # Set default environment variables
 ENV SERVICE=all
 ENV DATABASE_URL=postgresql://cws:password@localhost:5432/cws
 ENV REDIS_URL=redis://localhost:6379
-ENV SCAN_INTERVAL=300
-ENV WORKERS=4
 ENV NLP_WORKERS=2
-ENV PORT=8000
+ENV MODEL_CACHE=/models
 
 CMD ["/app/start.sh"]
