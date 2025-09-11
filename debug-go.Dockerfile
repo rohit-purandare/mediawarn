@@ -1,7 +1,12 @@
 # Debug Go build issues step by step
 FROM ubuntu:22.04
 
-RUN apt-get update && apt-get install -y golang-go git
+RUN apt-get update && apt-get install -y git curl && \
+    # Install a newer version of Go
+    curl -L https://go.dev/dl/go1.21.12.linux-amd64.tar.gz | tar -C /usr/local -xz && \
+    ln -sf /usr/local/go/bin/go /usr/bin/go && \
+    ln -sf /usr/local/go/bin/gofmt /usr/bin/gofmt && \
+    rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
@@ -21,12 +26,14 @@ RUN echo "=== Testing Go Module Download ===" && \
     echo "Downloading dependencies..." && \
     go mod download -x 2>&1
 
-# Test 3: Copy all internal packages (needed for dependencies)
+# Test 3: Copy all internal packages and test go mod tidy
 COPY scanner/internal/ ./scanner/internal/
-RUN echo "=== Testing Internal Packages ===" && \
+RUN echo "=== Testing Go Mod Tidy ===" && \
     cd scanner && \
-    go mod tidy && \
-    echo "All internal packages copied"
+    echo "Checking go.mod:" && \
+    cat go.mod && \
+    echo "Running go mod tidy with verbose output..." && \
+    go mod tidy -v 2>&1 || echo "go mod tidy failed with exit code $?"
 
 # Test 4: Copy main.go and try to build 
 COPY scanner/cmd/ ./scanner/cmd/
