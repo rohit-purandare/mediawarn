@@ -78,15 +78,22 @@ EOF
 # Install Python dependencies
 RUN pip3 install --no-cache-dir -r nlp/requirements.txt
 
-# Build Go services (one at a time with error checking)
-RUN cd scanner && \
-    go mod tidy && \
-    go build -o /app/bin/scanner ./cmd/main.go && \
+# Build Go services (one at a time with error checking and verbose output)
+RUN echo "Building scanner..." && \
+    cd scanner && \
+    echo "Go version: $(go version)" && \
+    echo "Go mod tidy..." && \
+    go mod tidy -v && \
+    echo "Go build scanner..." && \
+    go build -v -x -o /app/bin/scanner ./cmd/main.go && \
     echo "Scanner built successfully"
 
-RUN cd api && \
-    go mod tidy && \
-    go build -o /app/bin/api ./main.go && \
+RUN echo "Building API..." && \
+    cd api && \
+    echo "Go mod tidy..." && \
+    go mod tidy -v && \
+    echo "Go build API..." && \
+    go build -v -x -o /app/bin/api ./main.go && \
     echo "API built successfully"
 
 # Create startup script
