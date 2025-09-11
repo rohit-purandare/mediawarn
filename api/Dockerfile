@@ -19,14 +19,14 @@ RUN go mod tidy -v 2>&1 || echo "go mod tidy completed with exit $?"
 COPY . .
 
 # Build with same approach as debug test
-RUN go build -v -o api ./main.go 2>&1 || echo "go build completed with exit $?"
+RUN go build -v -o api-service ./main.go 2>&1 || echo "go build completed with exit $?"
 
 FROM alpine:latest
 
 RUN apk --no-cache add ca-certificates
 WORKDIR /root/
 
-COPY --from=builder /app/api .
+COPY --from=builder /app/api-service ./api
 
 EXPOSE 8000
 

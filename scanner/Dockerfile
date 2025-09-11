@@ -19,13 +19,13 @@ RUN go mod tidy -v 2>&1 || echo "go mod tidy completed with exit $?"
 COPY . .
 
 # Build with exact debug test flags  
-RUN go build -v -o scanner ./cmd/main.go 2>&1 || echo "go build completed with exit $?"
+RUN go build -v -o scanner-service ./cmd/main.go 2>&1 || echo "go build completed with exit $?"
 
 FROM alpine:latest
 
 RUN apk --no-cache add ca-certificates ffmpeg
 WORKDIR /root/
 
-COPY --from=builder /app/scanner .
+COPY --from=builder /app/scanner-service ./scanner
 
 CMD ["./scanner"]
