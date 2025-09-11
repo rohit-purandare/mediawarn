@@ -1,9 +1,17 @@
 # Multi-stage build for MediaWarn unified package
 FROM node:18-alpine AS frontend-builder
 
+# Install python and build dependencies for native modules
+RUN apk add --no-cache python3 make g++
+
 WORKDIR /app/frontend
 COPY frontend/package*.json ./
-RUN npm ci
+
+# Clear npm cache and install with more verbose output
+RUN npm cache clean --force && \
+    npm install --verbose --no-optional && \
+    npm list --depth=0
+
 COPY frontend/ ./
 RUN npm run build
 
