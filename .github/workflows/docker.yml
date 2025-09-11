@@ -50,7 +50,7 @@ jobs:
       uses: docker/build-push-action@v5
       with:
         context: .
-        file: ./debug-go.Dockerfile
+        file: ./simple-go-test.Dockerfile
         platforms: linux/amd64
         push: false
         tags: ${{ steps.meta.outputs.tags }}
