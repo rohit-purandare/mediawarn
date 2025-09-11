@@ -1,0 +1,187 @@
+name: Feature Request
+description: Suggest a new feature or enhancement
+title: "[FEATURE] "
+labels: ["enhancement", "needs-triage"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting a new feature! Please provide as much detail as possible to help us understand your request.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Feature Summary
+      description: A clear and concise summary of the feature you're requesting
+      placeholder: Brief description of the feature...
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement
+      description: What problem does this feature solve? What need does it address?
+      placeholder: |
+        Is your feature request related to a problem? Please describe.
+        Example: "I'm always frustrated when..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: A clear and concise description of what you want to happen
+      placeholder: Describe your proposed solution...
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternative Solutions
+      description: A clear and concise description of any alternative solutions or features you've considered
+      placeholder: Describe alternatives you've considered...
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      description: Which component would this feature primarily affect?
+      options:
+        - Scanner Service (Go)
+        - NLP Service (Python)  
+        - API Service (Go)
+        - Frontend (React)
+        - Database/Storage
+        - Docker/Deployment
+        - Documentation
+        - Multiple Components
+        - New Component
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: How important is this feature to you?
+      options:
+        - Nice to have
+        - Would be helpful
+        - Important
+        - Critical
+    validations:
+      required: true
+
+  - type: dropdown
+    id: complexity
+    attributes:
+      label: Estimated Complexity
+      description: How complex do you think this feature would be to implement?
+      options:
+        - Low (minor changes)
+        - Medium (moderate changes)
+        - High (significant changes)
+        - Very High (major architectural changes)
+        - Unknown
+
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Use Case & User Story
+      description: Describe specific use cases and user stories for this feature
+      placeholder: |
+        As a [user type], I want [feature] so that [benefit].
+        
+        Example scenarios:
+        1. When a user...
+        2. If a user needs to...
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance Criteria
+      description: What would need to be true for this feature to be considered complete?
+      placeholder: |
+        - [ ] Feature should do X
+        - [ ] Feature should handle Y case
+        - [ ] Feature should integrate with Z
+        - [ ] Feature should have tests
+        - [ ] Feature should have documentation
+
+  - type: textarea
+    id: mockups
+    attributes:
+      label: Mockups/Wireframes
+      description: If applicable, add mockups, wireframes, or visual examples
+      placeholder: Drag and drop images here or paste links
+
+  - type: textarea
+    id: technical-considerations
+    attributes:
+      label: Technical Considerations
+      description: Any technical details, constraints, or considerations for implementation
+      placeholder: |
+        - API changes needed
+        - Database schema changes
+        - Performance considerations
+        - Security implications
+        - Backwards compatibility
+
+  - type: dropdown
+    id: breaking-change
+    attributes:
+      label: Breaking Change
+      description: Would this feature require breaking changes to existing functionality?
+      options:
+        - No - fully backwards compatible
+        - Minor - configuration changes needed
+        - Major - significant changes to existing features
+        - Unknown
+
+  - type: textarea
+    id: related-issues
+    attributes:
+      label: Related Issues
+      description: Link to any related issues, discussions, or pull requests
+      placeholder: |
+        - Related to #123
+        - Depends on #456
+        - Blocks #789
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      description: Any other context, research, or examples that would be helpful
+      placeholder: |
+        - Links to similar features in other projects
+        - Research or documentation
+        - Community feedback
+
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution
+      description: Are you interested in contributing to this feature?
+      options:
+        - label: I would be willing to contribute to implementing this feature
+        - label: I would be willing to help with testing this feature
+        - label: I would be willing to help with documentation for this feature
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Checklist
+      description: Please confirm the following
+      options:
+        - label: I have searched existing issues to ensure this is not a duplicate
+          required: true
+        - label: I have provided clear use cases and acceptance criteria
+          required: true
+        - label: This feature aligns with the project's goals and scope
+          required: true

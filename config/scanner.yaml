@@ -1,0 +1,49 @@
+# Content Warning Scanner Configuration
+
+scanner:
+  # File extensions to process
+  extensions:
+    - .srt
+    - .vtt
+    - .mp4
+    - .mkv
+    - .avi
+
+  # Patterns to ignore
+  ignore_patterns:
+    - "*sample*"
+    - "*.tmp"
+    - "*trailer*"
+    - "*preview*"
+
+  # Scan interval in seconds
+  scan_interval: 300
+
+  # Number of worker threads
+  workers: 4
+
+nlp:
+  # Models to use for analysis
+  models:
+    - name: "distilbert-base-uncased"
+      weight: 0.6
+      categories: ["violence", "sexual_assault", "substance_abuse"]
+    - name: "microsoft/DialoGPT-medium"
+      weight: 0.4
+      categories: ["hate_speech", "discrimination"]
+
+  # Processing settings
+  batch_size: 32
+  max_context_window: 10
+  confidence_threshold: 0.7
+
+database:
+  connection_pool_size: 10
+  max_retries: 3
+  backup_schedule: "0 2 * * *"
+
+# Logging configuration
+logging:
+  level: INFO
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: /var/log/cws.log

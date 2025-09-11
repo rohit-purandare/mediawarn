@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 🔒 Security Issue
+    url: https://github.com/your-username/content-warning-scanner/security/advisories/new
+    about: Report a security vulnerability (private disclosure)
+  - name: 💬 Discussions
+    url: https://github.com/your-username/content-warning-scanner/discussions
+    about: Ask questions and discuss ideas with the community
+  - name: 📖 Documentation
+    url: https://github.com/your-username/content-warning-scanner/wiki
+    about: Read the project documentation and guides

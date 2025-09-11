@@ -1,0 +1,110 @@
+name: Question
+description: Ask a question about the project
+title: "[QUESTION] "
+labels: ["question", "needs-triage"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for your question! Please provide as much context as possible so we can help you effectively.
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+      description: What would you like to know?
+      placeholder: Ask your question here...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Question Category
+      description: What category does your question fall into?
+      options:
+        - Installation & Setup
+        - Configuration
+        - Usage & Features
+        - Troubleshooting
+        - Performance & Optimization
+        - Security & Privacy
+        - Development & Contributing
+        - API Usage
+        - Docker & Deployment
+        - Integration
+        - Architecture & Design
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Provide any relevant context about your setup, use case, or what you're trying to achieve
+      placeholder: |
+        - What are you trying to accomplish?
+        - What have you tried so far?
+        - Any relevant configuration or setup details
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment (if relevant)
+      description: If your question is environment-specific, please provide details
+      value: |
+        - OS: [e.g. Ubuntu 20.04, macOS 12.0, Windows 11]
+        - Docker Version: [e.g. 20.10.17]
+        - Version: [e.g. v1.0.0 or commit hash]
+        - Deployment: [e.g. Docker Compose, Manual]
+
+  - type: textarea
+    id: research
+    attributes:
+      label: Research Done
+      description: What documentation, issues, or resources have you already checked?
+      placeholder: |
+        - [ ] I have read the README
+        - [ ] I have checked the documentation
+        - [ ] I have searched existing issues
+        - [ ] I have looked at the code/examples
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Information
+      description: What kind of answer or information are you looking for?
+      placeholder: |
+        - Step-by-step instructions
+        - Code examples
+        - Configuration examples
+        - Conceptual explanation
+        - Best practices
+        - Troubleshooting steps
+
+  - type: checkboxes
+    id: urgency
+    attributes:
+      label: Urgency
+      description: How urgent is this question?
+      options:
+        - label: This is blocking my work
+        - label: This would help me move forward
+        - label: This is for future planning
+        - label: This is just curiosity/learning
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Checklist
+      description: Please confirm the following
+      options:
+        - label: I have searched existing issues and discussions
+          required: true
+        - label: I have provided sufficient context for my question
+          required: true
+        - label: I have specified what kind of answer I'm looking for
+          required: true

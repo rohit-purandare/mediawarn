@@ -1,0 +1,302 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+env:
+  GO_VERSION: '1.21'
+  NODE_VERSION: '18'
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  test-go:
+    name: Test Go Services
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: cws_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+    
+    - name: Cache Go modules
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+    
+    # Test Scanner Service
+    - name: Test Scanner Service
+      working-directory: ./scanner
+      env:
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/cws_test
+        REDIS_URL: redis://localhost:6379
+      run: |
+        go mod download
+        go mod verify
+        go vet ./...
+        go test -race -coverprofile=coverage.out -covermode=atomic ./...
+    
+    # Test API Service
+    - name: Test API Service
+      working-directory: ./api
+      env:
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/cws_test
+        REDIS_URL: redis://localhost:6379
+      run: |
+        go mod download
+        go mod verify
+        go vet ./...
+        go test -race -coverprofile=coverage.out -covermode=atomic ./...
+    
+    - name: Upload Go coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        files: ./scanner/coverage.out,./api/coverage.out
+        flags: golang
+
+  test-python:
+    name: Test Python NLP Service
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: cws_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+    
+    - name: Cache Python packages
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+    
+    - name: Install Python dependencies
+      working-directory: ./nlp
+      run: |
+        python -m pip install --upgrade pip
+        pip install pytest pytest-cov pytest-asyncio
+        pip install -r requirements.txt
+    
+    - name: Lint with flake8
+      working-directory: ./nlp
+      run: |
+        pip install flake8
+        flake8 app/ --count --select=E9,F63,F7,F82 --show-source --statistics
+        flake8 app/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+    
+    - name: Test with pytest
+      working-directory: ./nlp
+      env:
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/cws_test
+        REDIS_URL: redis://localhost:6379
+      run: |
+        pytest tests/ --cov=app --cov-report=xml --cov-report=term-missing
+    
+    - name: Upload Python coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        files: ./nlp/coverage.xml
+        flags: python
+
+  test-frontend:
+    name: Test Frontend
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
+    
+    - name: Install dependencies
+      working-directory: ./frontend
+      run: npm ci
+    
+    - name: Lint code
+      working-directory: ./frontend
+      run: npm run lint
+    
+    - name: Type check
+      working-directory: ./frontend
+      run: npm run type-check
+    
+    - name: Run tests
+      working-directory: ./frontend
+      run: npm test -- --coverage --watchAll=false
+    
+    - name: Build application
+      working-directory: ./frontend
+      run: npm run build
+    
+    - name: Upload Frontend coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        files: ./frontend/coverage/lcov.info
+        flags: frontend
+
+  build-docker:
+    name: Build Docker Images
+    runs-on: ubuntu-latest
+    needs: [test-go, test-python, test-frontend]
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Build Scanner Image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./scanner
+        push: false
+        tags: cws-scanner:test
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+    
+    - name: Build NLP Image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./nlp
+        push: false
+        tags: cws-nlp:test
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+    
+    - name: Build API Image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./api
+        push: false
+        tags: cws-api:test
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+    
+    - name: Build Frontend Image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./frontend
+        push: false
+        tags: cws-frontend:test
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+  integration-test:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: [build-docker]
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Create test environment file
+      run: |
+        cat > .env << EOF
+        MEDIA_PATH=./test-media
+        DATABASE_URL=postgresql://cws:password@postgres:5432/cws
+        REDIS_URL=redis://redis:6379
+        SCAN_INTERVAL=10
+        WORKERS=2
+        NLP_WORKERS=1
+        EOF
+    
+    - name: Create test media directory
+      run: |
+        mkdir -p test-media
+        echo "00:00:01,000 --> 00:00:05,000" > test-media/test.srt
+        echo "This is a test subtitle file." >> test-media/test.srt
+    
+    - name: Start services
+      run: docker-compose up -d --wait
+    
+    - name: Wait for services to be ready
+      run: |
+        timeout 60 bash -c 'until curl -f http://localhost:8000/health; do sleep 2; done'
+        timeout 60 bash -c 'until curl -f http://localhost:8001/health; do sleep 2; done'
+        timeout 60 bash -c 'until curl -f http://localhost:7219; do sleep 2; done'
+    
+    - name: Run integration tests
+      run: |
+        # Test API endpoints
+        curl -f http://localhost:8000/api/scan/status
+        curl -f http://localhost:8000/api/results
+        curl -f http://localhost:8000/api/stats/overview
+        
+        # Test frontend loads
+        curl -f http://localhost:7219
+        
+        echo "✅ Integration tests passed"
+    
+    - name: Show logs on failure
+      if: failure()
+      run: docker-compose logs
+    
+    - name: Cleanup
+      if: always()
+      run: docker-compose down -v

@@ -1,0 +1,1 @@
+- NEVER list Claude Code as an author on commits

@@ -1,0 +1,247 @@
+name: Security
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    - cron: '0 2 * * 1' # Weekly on Mondays
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+jobs:
+  codeql:
+    name: CodeQL Analysis
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        language: [ 'go', 'javascript', 'python' ]
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v2
+      with:
+        languages: ${{ matrix.language }}
+        queries: security-extended,security-and-quality
+    
+    - name: Set up Go
+      if: matrix.language == 'go'
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+    
+    - name: Set up Node.js
+      if: matrix.language == 'javascript'
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
+    
+    - name: Set up Python
+      if: matrix.language == 'python'
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Build Go services
+      if: matrix.language == 'go'
+      run: |
+        cd scanner && go build ./...
+        cd ../api && go build ./...
+    
+    - name: Build Frontend
+      if: matrix.language == 'javascript'
+      run: |
+        cd frontend
+        npm ci
+        npm run build
+    
+    - name: Install Python dependencies
+      if: matrix.language == 'python'
+      run: |
+        cd nlp
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v2
+      with:
+        category: "/language:${{matrix.language}}"
+
+  dependency-check:
+    name: Dependency Vulnerability Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    # Go Dependencies
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+    
+    - name: Run Govulncheck (Scanner)
+      working-directory: ./scanner
+      run: |
+        go install golang.org/x/vuln/cmd/govulncheck@latest
+        govulncheck ./...
+    
+    - name: Run Govulncheck (API)
+      working-directory: ./api
+      run: govulncheck ./...
+    
+    # Python Dependencies
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install Safety
+      run: pip install safety
+    
+    - name: Run Safety check
+      working-directory: ./nlp
+      run: safety check -r requirements.txt --json --output safety-report.json || true
+    
+    - name: Upload Safety report
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: safety-report
+        path: nlp/safety-report.json
+    
+    # Node.js Dependencies
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
+    
+    - name: Install dependencies
+      working-directory: ./frontend
+      run: npm ci
+    
+    - name: Run npm audit
+      working-directory: ./frontend
+      run: npm audit --audit-level=high
+
+  container-scan:
+    name: Container Security Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Build Docker images
+      run: |
+        docker build -t cws-scanner:scan ./scanner
+        docker build -t cws-nlp:scan ./nlp
+        docker build -t cws-api:scan ./api
+        docker build -t cws-frontend:scan ./frontend
+    
+    - name: Run Trivy vulnerability scanner (Scanner)
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: 'cws-scanner:scan'
+        format: 'sarif'
+        output: 'trivy-scanner.sarif'
+    
+    - name: Run Trivy vulnerability scanner (NLP)
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: 'cws-nlp:scan'
+        format: 'sarif'
+        output: 'trivy-nlp.sarif'
+    
+    - name: Run Trivy vulnerability scanner (API)
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: 'cws-api:scan'
+        format: 'sarif'
+        output: 'trivy-api.sarif'
+    
+    - name: Run Trivy vulnerability scanner (Frontend)
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: 'cws-frontend:scan'
+        format: 'sarif'
+        output: 'trivy-frontend.sarif'
+    
+    - name: Upload Trivy scan results to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: |
+          trivy-scanner.sarif
+          trivy-nlp.sarif
+          trivy-api.sarif
+          trivy-frontend.sarif
+
+  secrets-scan:
+    name: Secrets Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Run TruffleHog OSS
+      uses: trufflesecurity/trufflehog@main
+      with:
+        path: ./
+        base: main
+        head: HEAD
+        extra_args: --debug --only-verified
+
+  license-check:
+    name: License Compliance
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+    
+    - name: Install go-licenses
+      run: go install github.com/google/go-licenses@latest
+    
+    - name: Check Go licenses (Scanner)
+      working-directory: ./scanner
+      run: go-licenses check ./...
+    
+    - name: Check Go licenses (API)
+      working-directory: ./api
+      run: go-licenses check ./...
+    
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+    
+    - name: Install license-checker
+      run: npm install -g license-checker
+    
+    - name: Check Frontend licenses
+      working-directory: ./frontend
+      run: |
+        npm ci
+        license-checker --onlyAllow 'MIT;Apache-2.0;BSD-2-Clause;BSD-3-Clause;ISC' --excludePrivatePackages

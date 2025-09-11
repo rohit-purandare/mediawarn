@@ -1,0 +1,58 @@
+coverage:
+  status:
+    project:
+      default:
+        target: 80%
+        threshold: 2%
+        informational: true
+    patch:
+      default:
+        target: 80%
+        threshold: 5%
+
+comment:
+  layout: "header, diff, flags, components"
+  behavior: default
+  require_changes: false
+
+component_management:
+  individual_components:
+    - component_id: scanner
+      name: Scanner Service
+      paths:
+        - "scanner/**"
+    - component_id: nlp
+      name: NLP Service  
+      paths:
+        - "nlp/**"
+    - component_id: api
+      name: API Service
+      paths:
+        - "api/**"
+    - component_id: frontend
+      name: Frontend
+      paths:
+        - "frontend/**"
+
+flags:
+  golang:
+    paths:
+      - "scanner/"
+      - "api/"
+    carryforward: true
+  python:
+    paths:
+      - "nlp/"
+    carryforward: true
+  frontend:
+    paths:
+      - "frontend/"
+    carryforward: true
+
+ignore:
+  - "**/*_test.go"
+  - "**/tests/**"
+  - "**/*.test.js"
+  - "**/*.test.ts"
+  - "**/node_modules/**"
+  - "**/vendor/**"

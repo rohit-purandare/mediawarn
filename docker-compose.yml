@@ -1,0 +1,90 @@
+version: '3.8'
+
+services:
+  scanner:
+    build: ./scanner
+    container_name: cws-scanner
+    volumes:
+      - ./data:/data
+      - ./config:/config
+      # Mount your media directories here, e.g.:
+      # - /path/to/your/media:/media:ro
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - DATABASE_URL=postgresql://cws:password@postgres:5432/cws
+      - SCAN_INTERVAL=300
+    depends_on:
+      - redis
+      - postgres
+    restart: unless-stopped
+
+  nlp-worker:
+    build: ./nlp
+    container_name: cws-nlp
+    deploy:
+      replicas: ${NLP_WORKERS:-2}
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - DATABASE_URL=postgresql://cws:password@postgres:5432/cws
+      - MODEL_CACHE=/models
+      - CUDA_VISIBLE_DEVICES=${GPU_DEVICES:-}
+    volumes:
+      - ./nlp/models:/models
+      - ./data:/data:ro
+      # Mount same media directories as scanner if needed for subtitle extraction
+    depends_on:
+      - redis
+      - postgres
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    container_name: cws-frontend
+    ports:
+      - "7219:7219"
+    environment:
+      - REACT_APP_API_URL=http://localhost:8000
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  api:
+    build: ./api
+    container_name: cws-api
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://cws:password@postgres:5432/cws
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - postgres
+      - redis
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: cws-postgres
+    environment:
+      - POSTGRES_DB=cws
+      - POSTGRES_USER=cws
+      - POSTGRES_PASSWORD=password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: cws-redis
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:

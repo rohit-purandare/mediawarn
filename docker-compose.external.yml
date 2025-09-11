@@ -1,0 +1,59 @@
+# External Services Docker Compose - For existing PostgreSQL and Redis
+# Use this when you have PostgreSQL and Redis running outside of Docker
+version: '3.8'
+
+services:
+  scanner:
+    build: ./scanner
+    container_name: cws-scanner
+    volumes:
+      - ./data:/data
+      - ./config:/config
+      # Mount your media directories here, e.g.:
+      # - /path/to/your/media:/media:ro
+    environment:
+      - REDIS_URL=${REDIS_URL}
+      - DATABASE_URL=${DATABASE_URL}
+      - SCAN_INTERVAL=${SCAN_INTERVAL:-300}
+      - WORKERS=${WORKERS:-4}
+    network_mode: "host"
+    restart: unless-stopped
+
+  nlp-worker:
+    build: ./nlp
+    container_name: cws-nlp
+    deploy:
+      replicas: ${NLP_WORKERS:-2}
+    environment:
+      - REDIS_URL=${REDIS_URL}
+      - DATABASE_URL=${DATABASE_URL}
+      - MODEL_CACHE=/models
+      - CUDA_VISIBLE_DEVICES=${GPU_DEVICES:-}
+    volumes:
+      - ./nlp/models:/models
+      - ./data:/data:ro
+    network_mode: "host"
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    container_name: cws-frontend
+    ports:
+      - "7219:7219"
+    environment:
+      - REACT_APP_API_URL=http://localhost:8000
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  api:
+    build: ./api
+    container_name: cws-api
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - PORT=8000
+    network_mode: "host"
+    restart: unless-stopped
