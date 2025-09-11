@@ -1,8 +1,9 @@
-FROM ubuntu:22.04 AS builder
+FROM ubuntu:22.04
 
-RUN apt-get update && apt-get install -y git curl ca-certificates && \
-    curl -L https://go.dev/dl/go1.21.12.linux-amd64.tar.gz | tar -C /usr/local -xz && \
-    rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y \
+    git curl ca-certificates \
+    && curl -L https://go.dev/dl/go1.21.12.linux-amd64.tar.gz | tar -C /usr/local -xz \
+    && rm -rf /var/lib/apt/lists/*
 
 ENV PATH=$PATH:/usr/local/go/bin
 ENV GOPROXY=https://proxy.golang.org,direct
@@ -10,23 +11,13 @@ ENV GOSUMDB=sum.golang.org
 
 WORKDIR /app
 
-# Build with api directory as context
+# Copy and build with proven approach
 COPY go.mod ./
-RUN go mod download -x 2>&1 || echo "go mod download completed with exit $?"
-RUN go mod tidy -v 2>&1 || echo "go mod tidy completed with exit $?"
+RUN go mod download -x
+RUN go mod tidy -v
 
-# Copy all source files since context is ./api
 COPY . .
-
-# Build with same approach as debug test
-RUN go build -v -o api-service ./main.go 2>&1 || echo "go build completed with exit $?"
-
-FROM alpine:latest
-
-RUN apk --no-cache add ca-certificates
-WORKDIR /root/
-
-COPY --from=builder /app/api-service ./api
+RUN go build -v -o api ./main.go
 
 EXPOSE 8000
 
