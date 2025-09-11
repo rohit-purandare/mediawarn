@@ -1,18 +1,22 @@
 # Minimal MediaWarn package - Python NLP service + Frontend
 FROM ubuntu:22.04
 
-# Install dependencies
+# Install dependencies including Go
 RUN apt-get update && apt-get install -y \
     # System tools
     curl wget git ca-certificates \
-    # Go dependencies
-    golang-go \
     # Python and pip
     python3 python3-pip \
     # Runtime dependencies
     ffmpeg nginx supervisor \
     postgresql-client redis-tools \
+    && curl -L https://go.dev/dl/go1.21.12.linux-amd64.tar.gz | tar -C /usr/local -xz \
     && rm -rf /var/lib/apt/lists/*
+
+# Set Go environment
+ENV PATH=$PATH:/usr/local/go/bin
+ENV GOPROXY=https://proxy.golang.org,direct
+ENV GOSUMDB=sum.golang.org
 
 # Set working directory
 WORKDIR /app
@@ -26,12 +30,21 @@ COPY api/ ./api/
 # Install Python dependencies
 RUN pip3 install --no-cache-dir -r nlp/requirements.txt
 
-# Build Go services with error handling
-RUN echo "Building Go services..." && \
-    go version && \
-    (cd scanner && go mod tidy && go build -o ../bin/scanner ./cmd/main.go && echo "✅ Scanner built") && \
-    (cd api && go mod tidy && go build -o ../bin/api ./main.go && echo "✅ API built") && \
-    mkdir -p bin
+# Build Go services using the working approach
+RUN echo "Building Scanner..." && \
+    cd scanner && \
+    go mod tidy && \
+    go build -o ../bin/scanner ./cmd/main.go && \
+    echo "✅ Scanner built successfully"
+
+RUN echo "Building API..." && \
+    cd api && \
+    go mod tidy && \
+    go build -o ../bin/api ./main.go && \
+    echo "✅ API built successfully"
+
+RUN mkdir -p bin
+
 
 # Build static frontend
 RUN mkdir -p /app/frontend-build && \
