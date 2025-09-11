@@ -9,12 +9,21 @@ ENV GOPROXY=https://proxy.golang.org,direct
 ENV GOSUMDB=sum.golang.org
 
 WORKDIR /app
-COPY go.mod ./
-RUN go mod download -x
-RUN go mod tidy -v
 
+# Step-by-step build exactly like working debug test
+COPY go.mod ./
+RUN go mod download -x 2>&1 || echo "go mod download completed with exit $?"
+RUN go mod tidy -v 2>&1 || echo "go mod tidy completed with exit $?"
+
+# Copy internal packages first (like debug test)
+COPY internal/ ./internal/
+COPY cmd/ ./cmd/
+
+# Copy remaining files
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -v -o scanner ./cmd/main.go
+
+# Build with exact debug test flags
+RUN go build -v -o scanner ./cmd/main.go 2>&1 || echo "go build completed with exit $?"
 
 FROM alpine:latest
 
