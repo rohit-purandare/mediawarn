@@ -3,7 +3,7 @@ FROM node:18-alpine AS frontend-builder
 
 WORKDIR /app/frontend
 COPY frontend/package*.json ./
-RUN npm ci --only=production
+RUN npm ci
 COPY frontend/ ./
 RUN npm run build
 
@@ -33,6 +33,8 @@ RUN apt-get update && apt-get install -y \
     nginx \
     supervisor \
     ca-certificates \
+    postgresql-client \
+    redis-tools \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
@@ -68,7 +70,7 @@ set -e
 # Wait for dependencies if DATABASE_URL and REDIS_URL are provided
 if [ ! -z "$DATABASE_URL" ]; then
     echo "Waiting for database connection..."
-    until pg_isready -d "$DATABASE_URL" 2>/dev/null; do
+    until pg_isready -d "$DATABASE_URL" 2>/dev/null || [ $? -eq 2 ]; do
         echo "Database not ready, waiting..."
         sleep 2
     done
