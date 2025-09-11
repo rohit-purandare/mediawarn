@@ -1,0 +1,44 @@
+# Test Go build in Docker environment
+FROM ubuntu:22.04
+
+# Install Go
+RUN apt-get update && apt-get install -y golang-go && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Test 1: Basic Go version and environment
+RUN echo "Testing Go installation..." && \
+    go version && \
+    go env
+
+# Test 2: Simple Hello World
+RUN echo 'package main\nimport "fmt"\nfunc main() { fmt.Println("Hello World") }' > hello.go && \
+    go run hello.go && \
+    go build -o hello hello.go && \
+    ./hello && \
+    echo "Simple Go program works!"
+
+# Test 3: Go with modules
+RUN mkdir -p /app/test && cd /app/test && \
+    echo 'module test\ngo 1.21' > go.mod && \
+    echo 'package main\nimport "fmt"\nfunc main() { fmt.Println("Go modules work!") }' > main.go && \
+    go mod tidy && \
+    go build -o test . && \
+    ./test && \
+    echo "Go modules work!"
+
+# Test 4: Copy and build scanner (simplified)
+COPY scanner/go.mod /app/scanner-test/
+COPY scanner/cmd/main.go /app/scanner-test/
+COPY scanner/internal/ /app/scanner-test/internal/
+
+RUN cd /app/scanner-test && \
+    echo "Testing scanner go.mod..." && \
+    cat go.mod && \
+    echo "Downloading dependencies..." && \
+    go mod download -x && \
+    echo "Building scanner..." && \
+    go build -v -x -o scanner main.go && \
+    echo "Scanner build successful!"
+
+CMD ["echo", "All Go tests passed!"]

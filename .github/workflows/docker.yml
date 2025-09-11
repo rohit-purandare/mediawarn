@@ -14,6 +14,9 @@ env:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [scanner, nlp, api, frontend]
     
     permissions:
       contents: read
@@ -35,7 +38,7 @@ jobs:
       id: meta
       uses: docker/metadata-action@v5
       with:
-        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.service }}
         tags: |
           type=ref,event=branch
           type=ref,event=pr
@@ -46,13 +49,12 @@ jobs:
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
 
-    - name: Build and push unified Docker image
+    - name: Build and push ${{ matrix.service }} image
       uses: docker/build-push-action@v5
       with:
-        context: .
-        file: ./Dockerfile
+        context: ./${{ matrix.service }}
         platforms: linux/amd64,linux/arm64
-        push: false
+        push: ${{ github.event_name != 'pull_request' }}
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
         cache-from: type=gha
@@ -123,31 +125,62 @@ jobs:
               timeout: 5s
               retries: 5
         
-          mediawarn:
-            image: ghcr.io/${{ github.repository_owner }}/mediawarn:${{ github.ref_name }}
+          scanner:
+            image: ghcr.io/${{ github.repository_owner }}/mediawarn/scanner:${{ github.ref_name }}
             environment:
-              - SERVICE=all
               - DATABASE_URL=${DATABASE_URL:-postgresql://cws:password@postgres:5432/cws}
               - REDIS_URL=${REDIS_URL:-redis://redis:6379}
               - SCAN_INTERVAL=${SCAN_INTERVAL:-300}
               - WORKERS=${WORKERS:-4}
-              - NLP_WORKERS=${NLP_WORKERS:-2}
-              - PORT=${PORT:-8000}
-              - REACT_APP_API_URL=http://localhost:8000
             volumes:
               - ./config:/app/config:ro
-              - nlp_models:/models
               # Mount your media directories here
               # - /path/to/media:/media:ro
-            ports:
-              - "${FRONTEND_PORT:-7219}:7219"
-              - "8000:8000"
-              - "8001:8001"
             depends_on:
               postgres:
                 condition: service_healthy
               redis:
                 condition: service_healthy
+            restart: unless-stopped
+
+          nlp-worker:
+            image: ghcr.io/${{ github.repository_owner }}/mediawarn/nlp:${{ github.ref_name }}
+            environment:
+              - DATABASE_URL=${DATABASE_URL:-postgresql://cws:password@postgres:5432/cws}
+              - REDIS_URL=${REDIS_URL:-redis://redis:6379}
+              - NLP_WORKERS=${NLP_WORKERS:-2}
+              - MODEL_CACHE=/models
+            volumes:
+              - nlp_models:/models
+            depends_on:
+              postgres:
+                condition: service_healthy
+              redis:
+                condition: service_healthy
+            deploy:
+              replicas: ${NLP_WORKERS:-2}
+            restart: unless-stopped
+
+          api:
+            image: ghcr.io/${{ github.repository_owner }}/mediawarn/api:${{ github.ref_name }}
+            environment:
+              - DATABASE_URL=${DATABASE_URL:-postgresql://cws:password@postgres:5432/cws}
+              - PORT=${PORT:-8000}
+            ports:
+              - "8000:8000"
+            depends_on:
+              postgres:
+                condition: service_healthy
+            restart: unless-stopped
+
+          frontend:
+            image: ghcr.io/${{ github.repository_owner }}/mediawarn/frontend:${{ github.ref_name }}
+            environment:
+              - REACT_APP_API_URL=http://localhost:8000
+            ports:
+              - "${FRONTEND_PORT:-7219}:80"
+            depends_on:
+              - api
             restart: unless-stopped
         
         volumes:
@@ -170,18 +203,13 @@ jobs:
         body: |
           ## MediaWarn Release ${{ github.ref_name }}
           
-          ### Docker Image
-          MediaWarn is available as a unified Docker image containing all services:
+          ### Docker Images
+          All MediaWarn services are available as separate Docker images:
           
-          - **Unified Package**: `ghcr.io/${{ github.repository_owner }}/mediawarn:${{ github.ref_name }}`
-          
-          ### Service Modes
-          The image supports different service modes via the `SERVICE` environment variable:
-          - `all` (default): Run all services with supervisor
-          - `scanner`: Run only the scanner service  
-          - `api`: Run only the API service
-          - `nlp`: Run only the NLP worker
-          - `frontend`: Run only the frontend (nginx)
+          - **Scanner**: `ghcr.io/${{ github.repository_owner }}/mediawarn/scanner:${{ github.ref_name }}`
+          - **NLP Worker**: `ghcr.io/${{ github.repository_owner }}/mediawarn/nlp:${{ github.ref_name }}`
+          - **API**: `ghcr.io/${{ github.repository_owner }}/mediawarn/api:${{ github.ref_name }}`
+          - **Frontend**: `ghcr.io/${{ github.repository_owner }}/mediawarn/frontend:${{ github.ref_name }}`
           
           ### Quick Start
           

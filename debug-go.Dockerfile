@@ -35,14 +35,17 @@ RUN echo "=== Testing Go Mod Tidy ===" && \
     echo "Running go mod tidy with verbose output..." && \
     go mod tidy -v 2>&1 || echo "go mod tidy failed with exit code $?"
 
-# Test 4: Copy main.go and try to build 
+# Test 4: Copy main.go and try to build with better error capture
 COPY scanner/cmd/ ./scanner/cmd/
 RUN echo "=== Testing Main.go Compilation ===" && \
     cd scanner && \
     echo "Files in cmd:" && \
     ls -la cmd/ && \
+    echo "Contents of main.go:" && \
+    head -20 cmd/main.go && \
     echo "Trying to build main..." && \
-    go build -v -x -o test-scanner ./cmd/main.go 2>&1
+    (go build -v -o test-scanner ./cmd/main.go 2>&1) || (echo "Build failed, trying with different approach..." && \
+    go build -v ./cmd/main.go 2>&1 || echo "Both build attempts failed")
 
 # Test 5: Copy all scanner files and try full build  
 COPY scanner/ ./scanner/

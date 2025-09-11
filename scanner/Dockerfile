@@ -1,13 +1,20 @@
-FROM golang:1.21-alpine AS builder
+FROM ubuntu:22.04 AS builder
 
-RUN apk add --no-cache git
+RUN apt-get update && apt-get install -y git curl ca-certificates && \
+    curl -L https://go.dev/dl/go1.21.12.linux-amd64.tar.gz | tar -C /usr/local -xz && \
+    rm -rf /var/lib/apt/lists/*
+
+ENV PATH=$PATH:/usr/local/go/bin
+ENV GOPROXY=https://proxy.golang.org,direct
+ENV GOSUMDB=sum.golang.org
 
 WORKDIR /app
 COPY go.mod ./
-RUN go mod download && go mod verify
+RUN go mod download -x
+RUN go mod tidy -v
 
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -o scanner ./cmd/main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -v -o scanner ./cmd/main.go
 
 FROM alpine:latest
 
