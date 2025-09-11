@@ -30,18 +30,18 @@ COPY api/ ./api/
 # Install Python dependencies
 RUN pip3 install --no-cache-dir -r nlp/requirements.txt
 
-# Build Go services using the proven working approach from debug test
+# Build real Go services with working approach - separate RUN commands like debug test  
 RUN mkdir -p bin
 
-# Build Scanner with exact working steps
+# Scanner build (exactly like working debug test)
 RUN cd scanner && go mod download -x
-RUN cd scanner && go mod tidy -v  
-RUN cd scanner && go build -v -x -o scanner ./cmd/main.go
+RUN cd scanner && go mod tidy -v
+RUN cd scanner && go build -v -o scanner ./cmd/main.go  
 RUN cd scanner && mv scanner ../bin/ && echo "✅ Scanner built successfully"
 
-# Build API with exact working steps  
+# API build (exactly like working debug test)
 RUN cd api && go mod tidy -v
-RUN cd api && go build -v -x -o api ./main.go
+RUN cd api && go build -v -o api ./main.go
 RUN cd api && mv api ../bin/ && echo "✅ API built successfully"
 
 
