@@ -1,0 +1,229 @@
+name: Docker Build and Push
+
+on:
+  push:
+    branches: [ main, master, develop ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main, master ]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [scanner, nlp, api, frontend]
+    
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Log in to Container Registry
+      if: github.event_name != 'pull_request'
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.service }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+          type=raw,value=latest,enable={{is_default_branch}}
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./${{ matrix.service }}
+        platforms: linux/amd64,linux/arm64
+        push: ${{ github.event_name != 'pull_request' }}
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+  build-compose:
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    if: github.event_name != 'pull_request'
+    
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Extract metadata for compose
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=ref,event=branch
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+          type=raw,value=latest,enable={{is_default_branch}}
+
+    - name: Create production docker-compose
+      run: |
+        # Create production docker-compose file with built images
+        cat > docker-compose.prod.yml << 'EOF'
+        version: '3.8'
+        
+        services:
+          postgres:
+            image: postgres:15-alpine
+            environment:
+              POSTGRES_DB: ${POSTGRES_DB:-cws}
+              POSTGRES_USER: ${POSTGRES_USER:-cws}
+              POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+            volumes:
+              - postgres_data:/var/lib/postgresql/data
+              - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+            ports:
+              - "5432:5432"
+            healthcheck:
+              test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cws}"]
+              interval: 10s
+              timeout: 5s
+              retries: 5
+        
+          redis:
+            image: redis:7-alpine
+            ports:
+              - "6379:6379"
+            healthcheck:
+              test: ["CMD", "redis-cli", "ping"]
+              interval: 10s
+              timeout: 5s
+              retries: 5
+        
+          scanner:
+            image: ghcr.io/${{ github.repository_owner }}/mediawarn/scanner:${{ github.ref_name }}
+            environment:
+              - DATABASE_URL=${DATABASE_URL:-postgresql://cws:password@postgres:5432/cws}
+              - REDIS_URL=${REDIS_URL:-redis://redis:6379}
+              - SCAN_INTERVAL=${SCAN_INTERVAL:-300}
+              - WORKERS=${WORKERS:-4}
+            volumes:
+              - ./config:/app/config:ro
+              # Mount your media directories here
+              # - /path/to/media:/media:ro
+            depends_on:
+              postgres:
+                condition: service_healthy
+              redis:
+                condition: service_healthy
+            restart: unless-stopped
+        
+          nlp-worker:
+            image: ghcr.io/${{ github.repository_owner }}/mediawarn/nlp:${{ github.ref_name }}
+            environment:
+              - DATABASE_URL=${DATABASE_URL:-postgresql://cws:password@postgres:5432/cws}
+              - REDIS_URL=${REDIS_URL:-redis://redis:6379}
+              - NLP_WORKERS=${NLP_WORKERS:-2}
+              - MODEL_CACHE=/models
+            volumes:
+              - nlp_models:/models
+            depends_on:
+              postgres:
+                condition: service_healthy
+              redis:
+                condition: service_healthy
+            deploy:
+              replicas: ${NLP_WORKERS:-2}
+            restart: unless-stopped
+        
+          api:
+            image: ghcr.io/${{ github.repository_owner }}/mediawarn/api:${{ github.ref_name }}
+            environment:
+              - DATABASE_URL=${DATABASE_URL:-postgresql://cws:password@postgres:5432/cws}
+              - PORT=${PORT:-8000}
+            ports:
+              - "8000:8000"
+            depends_on:
+              postgres:
+                condition: service_healthy
+            restart: unless-stopped
+        
+          frontend:
+            image: ghcr.io/${{ github.repository_owner }}/mediawarn/frontend:${{ github.ref_name }}
+            environment:
+              - REACT_APP_API_URL=http://localhost:8000
+            ports:
+              - "${FRONTEND_PORT:-7219}:80"
+            depends_on:
+              - api
+            restart: unless-stopped
+        
+        volumes:
+          postgres_data:
+          nlp_models:
+        EOF
+
+    - name: Create GitHub Release
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          docker-compose.prod.yml
+          docker-compose.yml
+          docker-compose.external.yml
+          docker-compose.dev.yml
+          .env.example
+          .env.external.example
+          init.sql
+        body: |
+          ## MediaWarn Release ${{ github.ref_name }}
+          
+          ### Docker Images
+          All services are available as Docker images:
+          
+          - **Scanner**: `ghcr.io/${{ github.repository_owner }}/mediawarn/scanner:${{ github.ref_name }}`
+          - **NLP Worker**: `ghcr.io/${{ github.repository_owner }}/mediawarn/nlp:${{ github.ref_name }}`
+          - **API**: `ghcr.io/${{ github.repository_owner }}/mediawarn/api:${{ github.ref_name }}`
+          - **Frontend**: `ghcr.io/${{ github.repository_owner }}/mediawarn/frontend:${{ github.ref_name }}`
+          
+          ### Quick Start
+          
+          1. Download the release files
+          2. Use `docker-compose.prod.yml` for production deployment
+          3. Configure your media directories in the compose file
+          4. Run: `docker-compose -f docker-compose.prod.yml up -d`
+          
+          ### What's New
+          - Complete containerized deployment
+          - Multi-architecture support (AMD64/ARM64)
+          - Production-ready Docker Compose configuration
+          - Automated CI/CD pipeline
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
