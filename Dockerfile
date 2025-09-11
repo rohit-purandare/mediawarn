@@ -19,19 +19,22 @@ FROM golang:1.21-alpine AS go-builder
 
 RUN apk add --no-cache git
 
+# Set up workspace
+WORKDIR /app
+
+# Copy all Go modules and source
+COPY scanner/ ./scanner/
+COPY api/ ./api/
+
 # Build Scanner Service
 WORKDIR /app/scanner
-COPY scanner/go.mod ./
-RUN go mod download && go mod verify
-COPY scanner/ ./
-RUN CGO_ENABLED=0 GOOS=linux go build -o scanner ./cmd/main.go
+RUN go mod download && go mod verify && \
+    CGO_ENABLED=0 GOOS=linux go build -o scanner ./cmd
 
-# Build API Service
+# Build API Service  
 WORKDIR /app/api
-COPY api/go.mod ./
-RUN go mod download && go mod verify
-COPY api/ ./
-RUN CGO_ENABLED=0 GOOS=linux go build -o api .
+RUN go mod download && go mod verify && \
+    CGO_ENABLED=0 GOOS=linux go build -o api .
 
 FROM python:3.11-slim AS final
 
