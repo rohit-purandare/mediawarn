@@ -5,6 +5,8 @@ FROM ubuntu:22.04
 RUN apt-get update && apt-get install -y \
     # System tools
     curl wget git ca-certificates \
+    # Go dependencies
+    golang-go \
     # Python and pip
     python3 python3-pip \
     # Runtime dependencies
@@ -18,9 +20,18 @@ WORKDIR /app
 # Copy source code
 COPY nlp/ ./nlp/
 COPY config/ ./config/
+COPY scanner/ ./scanner/
+COPY api/ ./api/
 
 # Install Python dependencies
 RUN pip3 install --no-cache-dir -r nlp/requirements.txt
+
+# Build Go services with error handling
+RUN echo "Building Go services..." && \
+    go version && \
+    (cd scanner && go mod tidy && go build -o ../bin/scanner ./cmd/main.go && echo "✅ Scanner built") && \
+    (cd api && go mod tidy && go build -o ../bin/api ./main.go && echo "✅ API built") && \
+    mkdir -p bin
 
 # Build static frontend
 RUN mkdir -p /app/frontend-build && \
@@ -134,21 +145,17 @@ RUN mkdir -p /app/frontend-build && \
         <p class="subtitle">Privacy-focused content warning scanner for media files</p>
         
         <div class="status info">
-            <strong>🟢 Service Status:</strong> MediaWarn NLP service is running<br>
-            <small>Full API and scanner services coming soon</small>
-        </div>
-        
-        <div class="status warning">
-            <strong>⚠️ Note:</strong> This is a minimal deployment with NLP processing capabilities. 
-            The full scanner and API services are being added in future updates.
+            <strong>🟢 Service Status:</strong> All MediaWarn services are running<br>
+            <small>Scanner, API, NLP, and Frontend services active</small>
         </div>
         
         <h2>🔗 Available Services</h2>
         <div class="endpoint-list">
             <ul>
-                <li><strong>NLP Processing:</strong> Content analysis engine running on port 8001</li>
+                <li><strong>Scanner Service:</strong> Media file discovery and processing</li>
+                <li><strong>API Service:</strong> REST API on port 8000 - <a href="http://localhost:8000/api" class="api-link">http://localhost:8000/api</a></li>
+                <li><strong>NLP Processing:</strong> Content analysis engine on port 8001</li>
                 <li><strong>Web Interface:</strong> This status page on port 7219</li>
-                <li><strong>Configuration:</strong> Service configuration via environment variables</li>
             </ul>
         </div>
         
@@ -209,6 +216,14 @@ fi
 
 # Start services based on SERVICE environment variable
 case "${SERVICE:-all}" in
+    scanner)
+        echo "Starting Scanner service..."
+        exec /app/bin/scanner
+        ;;
+    api)
+        echo "Starting API service..."
+        exec /app/bin/api
+        ;;
     nlp)
         echo "Starting NLP worker..."
         cd /app && exec python3 -m nlp.main
@@ -219,7 +234,7 @@ case "${SERVICE:-all}" in
         exec nginx -g "daemon off;"
         ;;
     all|*)
-        echo "Starting NLP service and frontend with supervisor..."
+        echo "Starting all MediaWarn services with supervisor..."
         # Configure supervisor
         cat > /etc/supervisor/conf.d/mediawarn.conf << 'SUPERVISOR_EOF'
 [supervisord]
@@ -227,6 +242,22 @@ nodaemon=true
 user=root
 logfile=/var/log/supervisor/supervisord.log
 pidfile=/var/run/supervisord.pid
+
+[program:scanner]
+command=/app/bin/scanner
+directory=/app
+autostart=true
+autorestart=true
+stderr_logfile=/var/log/supervisor/scanner.err.log
+stdout_logfile=/var/log/supervisor/scanner.out.log
+
+[program:api]
+command=/app/bin/api
+directory=/app
+autostart=true
+autorestart=true
+stderr_logfile=/var/log/supervisor/api.err.log
+stdout_logfile=/var/log/supervisor/api.out.log
 
 [program:nlp]
 command=python3 -m nlp.main
@@ -257,7 +288,7 @@ RUN chmod +x /app/start.sh
 RUN mkdir -p /models /var/log/supervisor /var/www/html
 
 # Expose ports
-EXPOSE 7219 8001
+EXPOSE 7219 8000 8001
 
 # Set default environment variables
 ENV SERVICE=all
