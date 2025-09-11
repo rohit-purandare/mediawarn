@@ -10,19 +10,15 @@ ENV GOSUMDB=sum.golang.org
 
 WORKDIR /app
 
-# Step-by-step build exactly like working debug test
+# Build with scanner directory as context - copy files properly
 COPY go.mod ./
 RUN go mod download -x 2>&1 || echo "go mod download completed with exit $?"
 RUN go mod tidy -v 2>&1 || echo "go mod tidy completed with exit $?"
 
-# Copy internal packages first (like debug test)
-COPY internal/ ./internal/
-COPY cmd/ ./cmd/
-
-# Copy remaining files
+# Copy all source files since context is ./scanner
 COPY . .
 
-# Build with exact debug test flags
+# Build with exact debug test flags  
 RUN go build -v -o scanner ./cmd/main.go 2>&1 || echo "go build completed with exit $?"
 
 FROM alpine:latest
