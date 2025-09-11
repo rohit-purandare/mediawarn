@@ -1,11 +1,30 @@
-# Multi-stage build for MediaWarn unified package
-FROM node:18-alpine AS frontend-builder
+# Simple single-stage build for MediaWarn
+FROM ubuntu:22.04
 
-WORKDIR /app/frontend
+# Install all dependencies at once
+RUN apt-get update && apt-get install -y \
+    # System tools
+    curl wget git ca-certificates \
+    # Go dependencies
+    golang-go \
+    # Node.js and npm
+    nodejs npm \
+    # Python and pip
+    python3 python3-pip \
+    # Runtime dependencies
+    ffmpeg nginx supervisor \
+    postgresql-client redis-tools \
+    && rm -rf /var/lib/apt/lists/*
 
-# Create a simple static frontend as fallback
-RUN mkdir -p build && \
-    cat > build/index.html << 'EOF'
+# Set working directory
+WORKDIR /app
+
+# Copy all source code
+COPY . .
+
+# Build frontend (simple static version)
+RUN mkdir -p /app/frontend-build && \
+    cat > /app/frontend-build/index.html << 'EOF'
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -20,6 +39,7 @@ RUN mkdir -p build && \
         .info { background: #e7f3ff; border-left: 4px solid #2196F3; }
         .api-link { color: #2196F3; text-decoration: none; }
         .api-link:hover { text-decoration: underline; }
+        code { background: #f4f4f4; padding: 2px 6px; border-radius: 3px; }
     </style>
 </head>
 <body>
@@ -49,101 +69,59 @@ RUN mkdir -p build && \
             <li>Monitor results through the API endpoints</li>
         </ol>
         
-        <p><em>Full React frontend coming soon. API is fully functional.</em></p>
+        <p><em>MediaWarn provides complete privacy-focused content analysis.</em></p>
     </div>
 </body>
 </html>
 EOF
 
-FROM golang:1.21-alpine AS go-builder
-
-RUN apk add --no-cache git
-
-# Set up workspace
-WORKDIR /app
-
-# Copy all Go modules and source
-COPY scanner/ ./scanner/
-COPY api/ ./api/
-
-# Build Scanner Service
-WORKDIR /app/scanner
-RUN go mod download && go mod tidy && \
-    CGO_ENABLED=0 GOOS=linux go build -v -o scanner ./cmd/main.go
-
-# Build API Service  
-WORKDIR /app/api
-RUN go mod download && go mod tidy && \
-    CGO_ENABLED=0 GOOS=linux go build -v -o api ./main.go
-
-FROM python:3.11-slim AS final
-
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    ffmpeg \
-    nginx \
-    supervisor \
-    ca-certificates \
-    postgresql-client \
-    redis-tools \
-    && rm -rf /var/lib/apt/lists/*
-
-# Set working directory
-WORKDIR /app
-
 # Install Python dependencies
-COPY nlp/requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip3 install --no-cache-dir -r nlp/requirements.txt
 
-# Copy built Go binaries
-COPY --from=go-builder /app/scanner/scanner ./bin/scanner
-COPY --from=go-builder /app/api/api ./bin/api
+# Build Go services (one at a time with error checking)
+RUN cd scanner && \
+    go mod tidy && \
+    go build -o /app/bin/scanner ./cmd/main.go && \
+    echo "Scanner built successfully"
 
-# Copy Python NLP service
-COPY nlp/app/ ./nlp/
-
-# Copy built frontend
-COPY --from=frontend-builder /app/frontend/build ./frontend/
-COPY frontend/nginx.conf /etc/nginx/sites-available/default
-
-# Copy configuration files
-COPY config/ ./config/
-COPY init.sql ./
-
-# Create necessary directories
-RUN mkdir -p /models /var/log/supervisor /run/nginx
+RUN cd api && \
+    go mod tidy && \
+    go build -o /app/bin/api ./main.go && \
+    echo "API built successfully"
 
 # Create startup script
-RUN cat > /app/start.sh << 'EOF'
+RUN mkdir -p /app/bin && \
+    cat > /app/start.sh << 'EOF'
 #!/bin/bash
 set -e
 
-# Wait for dependencies if DATABASE_URL and REDIS_URL are provided
+echo "Starting MediaWarn services..."
+
+# Wait for dependencies
 if [ ! -z "$DATABASE_URL" ]; then
-    echo "Waiting for database connection..."
-    until pg_isready -d "$DATABASE_URL" 2>/dev/null || [ $? -eq 2 ]; do
-        echo "Database not ready, waiting..."
+    echo "Waiting for database..."
+    until pg_isready -d "$DATABASE_URL" 2>/dev/null; do
         sleep 2
     done
-    echo "Database is ready"
 fi
 
 # Start services based on SERVICE environment variable
 case "${SERVICE:-all}" in
     scanner)
         echo "Starting Scanner service..."
-        exec ./bin/scanner
+        exec /app/bin/scanner
         ;;
     api)
         echo "Starting API service..."
-        exec ./bin/api
+        exec /app/bin/api
         ;;
     nlp)
         echo "Starting NLP worker..."
-        exec python -m nlp.main
+        cd /app && exec python3 -m nlp.main
         ;;
     frontend)
         echo "Starting Frontend (nginx)..."
+        cp -r /app/frontend-build/* /var/www/html/
         exec nginx -g "daemon off;"
         ;;
     all|*)
@@ -163,7 +141,6 @@ autostart=true
 autorestart=true
 stderr_logfile=/var/log/supervisor/scanner.err.log
 stdout_logfile=/var/log/supervisor/scanner.out.log
-user=root
 
 [program:api]
 command=/app/bin/api
@@ -172,36 +149,39 @@ autostart=true
 autorestart=true
 stderr_logfile=/var/log/supervisor/api.err.log
 stdout_logfile=/var/log/supervisor/api.out.log
-user=root
 
 [program:nlp]
-command=python -m nlp.main
+command=python3 -m nlp.main
 directory=/app
 autostart=true
 autorestart=true
 stderr_logfile=/var/log/supervisor/nlp.err.log
 stdout_logfile=/var/log/supervisor/nlp.out.log
-user=root
 
 [program:nginx]
-command=nginx -g "daemon off;"
+command=bash -c "cp -r /app/frontend-build/* /var/www/html/ && nginx -g 'daemon off;'"
 autostart=true
 autorestart=true
 stderr_logfile=/var/log/supervisor/nginx.err.log
 stdout_logfile=/var/log/supervisor/nginx.out.log
-user=root
 SUPERVISOR_EOF
-        exec /usr/bin/supervisord -c /etc/supervisor/conf.d/mediawarn.conf
+
+        # Create nginx directories and start supervisor
+        mkdir -p /var/www/html /var/log/supervisor /run/nginx
+        exec supervisord -c /etc/supervisor/conf.d/mediawarn.conf
         ;;
 esac
 EOF
 
 RUN chmod +x /app/start.sh
 
+# Create necessary directories
+RUN mkdir -p /models /var/log/supervisor /var/www/html
+
 # Expose ports
 EXPOSE 7219 8000 8001
 
-# Set environment variables with defaults
+# Set default environment variables
 ENV SERVICE=all
 ENV DATABASE_URL=postgresql://cws:password@localhost:5432/cws
 ENV REDIS_URL=redis://localhost:6379
@@ -209,6 +189,5 @@ ENV SCAN_INTERVAL=300
 ENV WORKERS=4
 ENV NLP_WORKERS=2
 ENV PORT=8000
-ENV REACT_APP_API_URL=http://localhost:8000
 
 CMD ["/app/start.sh"]
