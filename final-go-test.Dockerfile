@@ -22,34 +22,65 @@ RUN go version && \
 COPY scanner/ ./scanner/
 
 RUN cd scanner && \
-    echo "=== SCANNER BUILD ATTEMPT ===" && \
+    exec > >(tee -a /tmp/scanner-build.log) 2>&1 && \
+    echo "=== SCANNER BUILD ATTEMPT - $(date) ===" && \
     echo "Directory contents:" && \
-    find . -name "*.go" | head -10 && \
+    find . -name "*.go" && \
     echo "" && \
-    echo "go.mod contents:" && \
+    echo "=== GO.MOD CONTENTS ===" && \
     cat go.mod && \
     echo "" && \
-    echo "Step 1: go mod download" && \
-    (go mod download -x 2>&1 | head -20) && \
+    echo "=== STEP 1: go mod download ===" && \
+    go mod download -x && \
+    echo "go mod download completed with exit code: $?" && \
     echo "" && \
-    echo "Step 2: go mod tidy" && \
-    (go mod tidy -v 2>&1 | head -20) && \
+    echo "=== STEP 2: go mod tidy ===" && \
+    go mod tidy -v && \
+    echo "go mod tidy completed with exit code: $?" && \
     echo "" && \
-    echo "Step 3: go list all" && \
-    (go list ./... 2>&1 | head -10) && \
+    echo "=== STEP 3: go list all packages ===" && \
+    go list ./... && \
+    echo "go list completed with exit code: $?" && \
     echo "" && \
-    echo "Step 4: go build" && \
-    (go build -v -o scanner ./cmd/main.go 2>&1 | head -50) && \
+    echo "=== STEP 4: go build main.go ===" && \
+    go build -v -x -o scanner ./cmd/main.go && \
+    echo "go build completed with exit code: $?" && \
+    echo "" && \
+    echo "=== BUILD VERIFICATION ===" && \
     ls -la scanner && \
-    echo "SUCCESS: Scanner built!"
+    file scanner && \
+    echo "SUCCESS: Scanner built and verified!" && \
+    cat /tmp/scanner-build.log
 
 # If scanner works, try API
 COPY api/ ./api/
 RUN cd api && \
-    echo "=== API BUILD ATTEMPT ===" && \
-    go mod tidy && \
-    go build -v -o api ./main.go && \
+    exec > >(tee -a /tmp/api-build.log) 2>&1 && \
+    echo "=== API BUILD ATTEMPT - $(date) ===" && \
+    echo "API directory contents:" && \
+    find . -name "*.go" && \
+    echo "" && \
+    echo "=== API GO.MOD CONTENTS ===" && \
+    cat go.mod && \
+    echo "" && \
+    echo "=== API STEP 1: go mod tidy ===" && \
+    go mod tidy -v && \
+    echo "API go mod tidy completed with exit code: $?" && \
+    echo "" && \
+    echo "=== API STEP 2: go build ===" && \
+    go build -v -x -o api ./main.go && \
+    echo "API go build completed with exit code: $?" && \
+    echo "" && \
+    echo "=== API BUILD VERIFICATION ===" && \
     ls -la api && \
-    echo "SUCCESS: API built!"
+    file api && \
+    echo "SUCCESS: API built and verified!" && \
+    echo "" && \
+    echo "=== FINAL BUILD LOGS ===" && \
+    echo "Scanner log:" && \
+    cat /tmp/scanner-build.log && \
+    echo "" && \
+    echo "API log:" && \
+    cat /tmp/api-build.log
 
 CMD ["echo", "All Go services built successfully!"]
