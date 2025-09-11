@@ -21,17 +21,21 @@ RUN echo "=== Testing Go Module Download ===" && \
     echo "Downloading dependencies..." && \
     go mod download -x 2>&1
 
-# Test 3: Copy one source file and try to build
-COPY scanner/internal/config/config.go ./scanner/internal/config/
-RUN echo "=== Testing Simple Go Build ===" && \
+# Test 3: Copy all internal packages (needed for dependencies)
+COPY scanner/internal/ ./scanner/internal/
+RUN echo "=== Testing Internal Packages ===" && \
     cd scanner && \
-    go build -v ./internal/config/ 2>&1
+    go mod tidy && \
+    echo "All internal packages copied"
 
-# Test 4: Copy main.go and try to build just main
-COPY scanner/cmd/main.go ./scanner/cmd/
+# Test 4: Copy main.go and try to build 
+COPY scanner/cmd/ ./scanner/cmd/
 RUN echo "=== Testing Main.go Compilation ===" && \
     cd scanner && \
-    go build -v -x ./cmd/main.go 2>&1
+    echo "Files in cmd:" && \
+    ls -la cmd/ && \
+    echo "Trying to build main..." && \
+    go build -v -x -o test-scanner ./cmd/main.go 2>&1
 
 # Test 5: Copy all scanner files and try full build  
 COPY scanner/ ./scanner/
