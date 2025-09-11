@@ -29,12 +29,12 @@ COPY api/ ./api/
 # Build Scanner Service
 WORKDIR /app/scanner
 RUN go mod download && go mod verify && \
-    CGO_ENABLED=0 GOOS=linux go build -o scanner ./cmd
+    CGO_ENABLED=0 GOOS=linux go build -o scanner ./cmd/main.go
 
 # Build API Service  
 WORKDIR /app/api
 RUN go mod download && go mod verify && \
-    CGO_ENABLED=0 GOOS=linux go build -o api .
+    CGO_ENABLED=0 GOOS=linux go build -o api ./main.go
 
 FROM python:3.11-slim AS final
 
