@@ -21,66 +21,30 @@ RUN go version && \
 # Copy scanner and try step by step
 COPY scanner/ ./scanner/
 
-RUN cd scanner && \
-    exec > >(tee -a /tmp/scanner-build.log) 2>&1 && \
-    echo "=== SCANNER BUILD ATTEMPT - $(date) ===" && \
-    echo "Directory contents:" && \
-    find . -name "*.go" && \
-    echo "" && \
-    echo "=== GO.MOD CONTENTS ===" && \
-    cat go.mod && \
-    echo "" && \
-    echo "=== STEP 1: go mod download ===" && \
-    go mod download -x && \
-    echo "go mod download completed with exit code: $?" && \
-    echo "" && \
-    echo "=== STEP 2: go mod tidy ===" && \
-    go mod tidy -v && \
-    echo "go mod tidy completed with exit code: $?" && \
-    echo "" && \
-    echo "=== STEP 3: go list all packages ===" && \
-    go list ./... && \
-    echo "go list completed with exit code: $?" && \
-    echo "" && \
-    echo "=== STEP 4: go build main.go ===" && \
-    go build -v -x -o scanner ./cmd/main.go && \
-    echo "go build completed with exit code: $?" && \
-    echo "" && \
-    echo "=== BUILD VERIFICATION ===" && \
-    ls -la scanner && \
-    file scanner && \
-    echo "SUCCESS: Scanner built and verified!" && \
-    cat /tmp/scanner-build.log
+# Test each step individually to isolate failures
+RUN cd scanner && echo "=== STEP 1: Go version ===" && go version || echo "ERROR: Go version failed"
+RUN cd scanner && echo "=== STEP 2: Directory contents ===" && ls -la || echo "ERROR: Directory listing failed"  
+RUN cd scanner && echo "=== STEP 3: Internal structure ===" && find internal -name "*.go" || echo "ERROR: Find internal failed"
+RUN cd scanner && echo "=== STEP 4: go.mod contents ===" && cat go.mod || echo "ERROR: Reading go.mod failed"
+RUN cd scanner && echo "=== STEP 5: go env check ===" && go env GOOS GOARCH GOPROXY || echo "ERROR: go env failed"
+RUN cd scanner && echo "=== STEP 6: go mod download ===" && go mod download -x 2>&1 || echo "ERROR: go mod download failed with exit $?"
+RUN cd scanner && echo "=== STEP 7: go mod tidy ===" && go mod tidy -v 2>&1 || echo "ERROR: go mod tidy failed with exit $?"
+RUN cd scanner && echo "=== STEP 8: go list packages ===" && go list ./... 2>&1 || echo "ERROR: go list failed with exit $?"
+RUN cd scanner && echo "=== STEP 9: go build (verbose) ===" && go build -v -x -o scanner ./cmd/main.go 2>&1 || echo "ERROR: go build failed with exit $?"
+RUN cd scanner && echo "=== STEP 10: verify binary ===" && (ls -la scanner && file scanner && echo "SUCCESS: Scanner binary created!") || echo "ERROR: No scanner binary found"
 
-# If scanner works, try API
+# Test API build step by step  
 COPY api/ ./api/
-RUN cd api && \
-    exec > >(tee -a /tmp/api-build.log) 2>&1 && \
-    echo "=== API BUILD ATTEMPT - $(date) ===" && \
-    echo "API directory contents:" && \
-    find . -name "*.go" && \
-    echo "" && \
-    echo "=== API GO.MOD CONTENTS ===" && \
-    cat go.mod && \
-    echo "" && \
-    echo "=== API STEP 1: go mod tidy ===" && \
-    go mod tidy -v && \
-    echo "API go mod tidy completed with exit code: $?" && \
-    echo "" && \
-    echo "=== API STEP 2: go build ===" && \
-    go build -v -x -o api ./main.go && \
-    echo "API go build completed with exit code: $?" && \
-    echo "" && \
-    echo "=== API BUILD VERIFICATION ===" && \
-    ls -la api && \
-    file api && \
-    echo "SUCCESS: API built and verified!" && \
-    echo "" && \
-    echo "=== FINAL BUILD LOGS ===" && \
-    echo "Scanner log:" && \
-    cat /tmp/scanner-build.log && \
-    echo "" && \
-    echo "API log:" && \
-    cat /tmp/api-build.log
+RUN cd api && echo "=== API STEP 1: Directory contents ===" && ls -la || echo "ERROR: API directory listing failed"
+RUN cd api && echo "=== API STEP 2: Find Go files ===" && find . -name "*.go" || echo "ERROR: API find failed"
+RUN cd api && echo "=== API STEP 3: go.mod contents ===" && cat go.mod || echo "ERROR: Reading API go.mod failed"
+RUN cd api && echo "=== API STEP 4: go mod tidy ===" && go mod tidy -v 2>&1 || echo "ERROR: API go mod tidy failed with exit $?"
+RUN cd api && echo "=== API STEP 5: go build ===" && go build -v -x -o api ./main.go 2>&1 || echo "ERROR: API go build failed with exit $?"
+RUN cd api && echo "=== API STEP 6: verify binary ===" && (ls -la api && file api && echo "SUCCESS: API binary created!") || echo "ERROR: No API binary found"
+
+RUN echo "=== FINAL SUMMARY ===" && \
+    echo "Scanner binary:" && (ls -la scanner/scanner 2>/dev/null || echo "Scanner not found") && \
+    echo "API binary:" && (ls -la api/api 2>/dev/null || echo "API not found") && \
+    echo "Build test complete."
 
 CMD ["echo", "All Go services built successfully!"]
