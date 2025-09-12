@@ -2,7 +2,9 @@ FROM ubuntu:22.04
 
 RUN apt-get update && apt-get install -y \
     git curl ca-certificates \
-    && curl -L https://go.dev/dl/go1.21.12.linux-amd64.tar.gz | tar -C /usr/local -xz \
+    && ARCH=$(dpkg --print-architecture) \
+    && if [ "$ARCH" = "amd64" ]; then GOARCH="amd64"; elif [ "$ARCH" = "arm64" ]; then GOARCH="arm64"; else GOARCH="amd64"; fi \
+    && curl -L https://go.dev/dl/go1.21.12.linux-${GOARCH}.tar.gz | tar -C /usr/local -xz \
     && rm -rf /var/lib/apt/lists/*
 
 ENV PATH=$PATH:/usr/local/go/bin
