@@ -59,7 +59,7 @@ RUN echo "=== Attempting React build ===" && \
 </body>
 </html>
 EOF
-     echo "Static fallback frontend created")
+echo "Static fallback frontend created")
 
 # Production stage
 FROM nginx:alpine
