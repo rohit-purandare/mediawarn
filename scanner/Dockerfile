@@ -13,30 +13,12 @@ ENV GOSUMDB=sum.golang.org
 
 WORKDIR /app
 
-# Copy and build with proven approach  
-COPY go.mod ./
-RUN go mod download -x
-RUN go mod tidy -v
+# Copy source and build with working go.sum files
+COPY go.mod go.sum ./
+RUN go mod download
 
 COPY . .
-RUN go get ./...
-
-# Build with comprehensive error capture - never fail the Docker build
-RUN echo "=== Attempting Scanner build ===" && \
-    echo "Files in directory:" && \
-    ls -la && \
-    echo "Internal structure:" && \
-    find internal -name "*.go" 2>/dev/null || echo "No internal directory" && \
-    echo "CMD structure:" && \
-    find cmd -name "*.go" 2>/dev/null || echo "No cmd directory" && \
-    echo "go.mod content:" && \
-    cat go.mod && \
-    echo "Starting build..." && \
-    (go build -v -x -o scanner ./cmd/main.go 2>&1 && echo "SUCCESS: Scanner built") || \
-    (echo "FAILED: Scanner build failed, creating dummy binary..." && \
-     echo '#!/bin/bash\necho "Scanner service placeholder - build failed"\nsleep 3600' > scanner && \
-     chmod +x scanner && \
-     echo "Dummy scanner binary created")
+RUN go build -v -o scanner ./cmd/main.go
 
 EXPOSE 8080
 

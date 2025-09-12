@@ -1,7 +1,6 @@
 package database
 
 import (
-	"os"
 	"time"
 
 	"gorm.io/driver/postgres"
