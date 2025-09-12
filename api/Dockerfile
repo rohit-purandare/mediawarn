@@ -19,6 +19,7 @@ RUN go mod download -x
 RUN go mod tidy -v
 
 COPY . .
+RUN go get ./...
 
 # Build with comprehensive error capture - never fail the Docker build
 RUN echo "=== Attempting API build ===" && \

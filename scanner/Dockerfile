@@ -13,12 +13,13 @@ ENV GOSUMDB=sum.golang.org
 
 WORKDIR /app
 
-# Copy and build with proven approach
+# Copy and build with proven approach  
 COPY go.mod ./
 RUN go mod download -x
 RUN go mod tidy -v
 
 COPY . .
+RUN go get ./...
 
 # Build with comprehensive error capture - never fail the Docker build
 RUN echo "=== Attempting Scanner build ===" && \
