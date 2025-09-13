@@ -1,20 +1,24 @@
-FROM golang:1.21-alpine AS builder
+FROM ubuntu:22.04
 
-RUN apk add --no-cache git
+RUN apt-get update && apt-get install -y \
+    git curl ca-certificates \
+    && ARCH=$(dpkg --print-architecture) \
+    && if [ "$ARCH" = "amd64" ]; then GOARCH="amd64"; elif [ "$ARCH" = "arm64" ]; then GOARCH="arm64"; else GOARCH="amd64"; fi \
+    && curl -L https://go.dev/dl/go1.21.12.linux-${GOARCH}.tar.gz | tar -C /usr/local -xz \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV PATH=$PATH:/usr/local/go/bin
+ENV GOPROXY=https://proxy.golang.org,direct
+ENV GOSUMDB=sum.golang.org
 
 WORKDIR /app
+
+# Copy source and build with working go.sum files
 COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -o api .
-
-FROM alpine:latest
-
-RUN apk --no-cache add ca-certificates
-WORKDIR /root/
-
-COPY --from=builder /app/api .
+RUN go build -v -o api ./main.go
 
 EXPOSE 8000
 
