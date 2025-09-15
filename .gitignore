@@ -279,6 +279,7 @@ cython_debug/
 
 # Claude Code
 .claude/
+CLAUDE.md
 
 # Product Requirements Document (development artifact)
 PRD
