@@ -40,7 +40,7 @@ COPY scanner/ .
 RUN go build -ldflags="-w -s" -o scanner ./cmd/main.go
 
 # Python NLP build stage (official PyTorch image - industry standard)
-FROM pytorch/pytorch:2.1.1-cpu as python-builder
+FROM python:3.11-slim as python-builder
 
 # Install system dependencies needed for other packages
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -49,18 +49,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app/nlp
 
-# Copy requirements and filter out PyTorch packages (already installed in base)
+# Copy requirements and install PyTorch CPU-only first
 COPY nlp/requirements.txt .
-RUN grep -v "torch" requirements.txt > requirements-filtered.txt
+RUN pip install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
 
-# Install remaining requirements (skip torch, torchvision, torchaudio)
-RUN pip install --no-cache-dir -r requirements-filtered.txt
+# Install remaining requirements
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Verification
 RUN python -c "import torch; import transformers; print(f'PyTorch {torch.__version__}, Transformers ready')"
 
-# Final runtime stage - use same base as PyTorch for compatibility
-FROM pytorch/pytorch:2.1.1-cpu
+# Final runtime stage - use same Python base for simplicity
+FROM python:3.11-slim
 
 # Install only essential runtime dependencies (no build tools)
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -74,15 +74,14 @@ WORKDIR /app
 COPY --from=go-build /app/api/api /app/api
 COPY --from=go-build /app/scanner/scanner /app/scanner
 
-# Copy installed Python packages from builder stage (PyTorch uses Python 3.11)
-COPY --from=python-builder /opt/conda/lib/python3.11/site-packages /opt/conda/lib/python3.11/site-packages
+# Copy installed Python packages from builder stage
+COPY --from=python-builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 
 # Copy NLP application code
 COPY nlp/app/ /app/nlp/app/
 
-# Set Python path to use conda environment
-ENV PATH="/opt/conda/bin:$PATH" \
-    PYTHONPATH="/app" \
+# Set Python environment variables
+ENV PYTHONPATH="/app" \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
