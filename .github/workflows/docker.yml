@@ -14,10 +14,7 @@ env:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        service: [scanner, nlp, api, frontend]
-    
+
     permissions:
       contents: read
       packages: write
@@ -38,7 +35,7 @@ jobs:
       id: meta
       uses: docker/metadata-action@v5
       with:
-        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.service }}
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
         tags: |
           type=ref,event=branch
           type=ref,event=pr
@@ -49,10 +46,11 @@ jobs:
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
 
-    - name: Build and push ${{ matrix.service }} image
+    - name: Build and push unified image
       uses: docker/build-push-action@v5
       with:
-        context: ./${{ matrix.service }}
+        context: .
+        file: ./Dockerfile
         platforms: linux/amd64,linux/arm64
         push: ${{ github.event_name != 'pull_request' }}
         tags: ${{ steps.meta.outputs.tags }}
@@ -96,7 +94,7 @@ jobs:
         # Create production docker-compose file with unified image
         cat > docker-compose.prod.yml << 'EOF'
         version: '3.8'
-        
+
         services:
           postgres:
             image: postgres:15-alpine
@@ -114,7 +112,7 @@ jobs:
               interval: 10s
               timeout: 5s
               retries: 5
-        
+
           redis:
             image: redis:7-alpine
             ports:
@@ -124,65 +122,36 @@ jobs:
               interval: 10s
               timeout: 5s
               retries: 5
-        
-          scanner:
-            image: ghcr.io/${{ github.repository_owner }}/mediawarn/scanner:${{ github.ref_name }}
+
+          mediawarn:
+            image: ghcr.io/${{ github.repository_owner }}/mediawarn:${{ github.ref_name }}
+            container_name: mediawarn
             environment:
+              - SERVICE=all
               - DATABASE_URL=${DATABASE_URL:-postgresql://cws:password@postgres:5432/cws}
               - REDIS_URL=${REDIS_URL:-redis://redis:6379}
               - SCAN_INTERVAL=${SCAN_INTERVAL:-300}
               - WORKERS=${WORKERS:-4}
+              - NLP_WORKERS=${NLP_WORKERS:-2}
+              - PORT=${PORT:-8000}
+              - REACT_APP_API_URL=http://localhost:8000
             volumes:
+              - ./data:/data
               - ./config:/app/config:ro
+              - nlp_models:/models
               # Mount your media directories here
               # - /path/to/media:/media:ro
-            depends_on:
-              postgres:
-                condition: service_healthy
-              redis:
-                condition: service_healthy
-            restart: unless-stopped
-
-          nlp-worker:
-            image: ghcr.io/${{ github.repository_owner }}/mediawarn/nlp:${{ github.ref_name }}
-            environment:
-              - DATABASE_URL=${DATABASE_URL:-postgresql://cws:password@postgres:5432/cws}
-              - REDIS_URL=${REDIS_URL:-redis://redis:6379}
-              - NLP_WORKERS=${NLP_WORKERS:-2}
-              - MODEL_CACHE=/models
-            volumes:
-              - nlp_models:/models
-            depends_on:
-              postgres:
-                condition: service_healthy
-              redis:
-                condition: service_healthy
-            deploy:
-              replicas: ${NLP_WORKERS:-2}
-            restart: unless-stopped
-
-          api:
-            image: ghcr.io/${{ github.repository_owner }}/mediawarn/api:${{ github.ref_name }}
-            environment:
-              - DATABASE_URL=${DATABASE_URL:-postgresql://cws:password@postgres:5432/cws}
-              - PORT=${PORT:-8000}
             ports:
+              - "7219:7219"
               - "8000:8000"
+              - "8001:8001"
             depends_on:
               postgres:
                 condition: service_healthy
+              redis:
+                condition: service_healthy
             restart: unless-stopped
 
-          frontend:
-            image: ghcr.io/${{ github.repository_owner }}/mediawarn/frontend:${{ github.ref_name }}
-            environment:
-              - REACT_APP_API_URL=http://localhost:8000
-            ports:
-              - "${FRONTEND_PORT:-7219}:80"
-            depends_on:
-              - api
-            restart: unless-stopped
-        
         volumes:
           postgres_data:
           nlp_models:
@@ -202,27 +171,31 @@ jobs:
           init.sql
         body: |
           ## MediaWarn Release ${{ github.ref_name }}
-          
-          ### Docker Images
-          All MediaWarn services are available as separate Docker images:
-          
-          - **Scanner**: `ghcr.io/${{ github.repository_owner }}/mediawarn/scanner:${{ github.ref_name }}`
-          - **NLP Worker**: `ghcr.io/${{ github.repository_owner }}/mediawarn/nlp:${{ github.ref_name }}`
-          - **API**: `ghcr.io/${{ github.repository_owner }}/mediawarn/api:${{ github.ref_name }}`
-          - **Frontend**: `ghcr.io/${{ github.repository_owner }}/mediawarn/frontend:${{ github.ref_name }}`
-          
+
+          ### Docker Image
+          MediaWarn is now available as a unified Docker image containing all services:
+
+          - **Unified**: `ghcr.io/${{ github.repository_owner }}/mediawarn:${{ github.ref_name }}`
+
+          The image can run all services together or individual services based on the `SERVICE` environment variable:
+          - `SERVICE=all` - All services (default)
+          - `SERVICE=api` - API service only
+          - `SERVICE=scanner` - Scanner service only
+          - `SERVICE=nlp` - NLP service only
+          - `SERVICE=frontend` - Frontend service only
+
           ### Quick Start
-          
+
           1. Download the release files
           2. Use `docker-compose.prod.yml` for production deployment
           3. Configure your media directories in the compose file
           4. Run: `docker-compose -f docker-compose.prod.yml up -d`
-          
+
           ### What's New
-          - Complete containerized deployment
+          - Unified Docker image with all services
           - Multi-architecture support (AMD64/ARM64)
-          - Production-ready Docker Compose configuration
-          - Automated CI/CD pipeline
+          - Service routing via environment variables
+          - Simplified deployment and configuration
         draft: false
         prerelease: false
       env:
