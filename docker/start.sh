@@ -31,7 +31,7 @@ start_scanner() {
 # Function to start NLP service
 start_nlp() {
     echo "Starting NLP service on port 8001..."
-    cd /app/nlp && python3 -m app.main &
+    cd /app/nlp && python -m app.main &
 }
 
 # Handle different service configurations
