@@ -34,14 +34,16 @@ ENV GOSUMDB=sum.golang.org
 
 WORKDIR /app
 
-# Copy Go modules and download dependencies
-COPY go.mod go.sum ./
-RUN go mod download
+# Build API service
+COPY api/ ./api/
+WORKDIR /app/api
+RUN go mod download && go build -v -o api ./main.go
 
-# Copy source and build services
-COPY . .
-RUN go build -v -o api ./api/main.go
-RUN go build -v -o scanner ./scanner/cmd/main.go
+# Build Scanner service
+WORKDIR /app
+COPY scanner/ ./scanner/
+WORKDIR /app/scanner
+RUN go mod download && go build -v -o scanner ./cmd/main.go
 
 # Python NLP build stage
 FROM python:3.11-slim as nlp-build
@@ -65,8 +67,8 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 # Copy built Go services
-COPY --from=go-build /app/api /app/api
-COPY --from=go-build /app/scanner /app/scanner
+COPY --from=go-build /app/api/api /app/api
+COPY --from=go-build /app/scanner/scanner /app/scanner
 
 # Copy Python NLP service
 COPY --from=nlp-build /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
