@@ -2,11 +2,15 @@
 
 # Frontend build stage
 FROM node:18-alpine as frontend-build
+
+# Install build dependencies that might be needed for native modules
+RUN apk add --no-cache python3 make g++
+
 WORKDIR /app/frontend
 
 # Copy package files first for better caching
 COPY frontend/package*.json ./
-RUN npm ci --silent
+RUN npm install --verbose
 
 # Copy source and build
 COPY frontend/ .
