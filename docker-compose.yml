@@ -16,9 +16,9 @@ services:
       - PORT=8000
       - REACT_APP_API_URL=http://localhost:8000
     volumes:
-      - ./data:/data
-      - ./config:/app/config:ro
-      - nlp_models:/models
+      - ./data:/data                    # Auto-created by Docker Compose
+      - ./config:/app/config:ro         # Auto-created by Docker Compose
+      - nlp_models:/models              # Named volume (auto-created)
       # Mount your media directories here, e.g.:
       # - /path/to/your/media:/media:ro
     ports:

@@ -91,7 +91,7 @@ COPY --from=frontend-build /app/frontend/build /usr/share/nginx/html
 COPY frontend/nginx.conf /etc/nginx/nginx.conf
 
 # Create directories with proper permissions
-RUN mkdir -p /models /data
+RUN mkdir -p /models /data /app/config
 
 # Copy startup script and make executable
 COPY docker/start.sh /app/start.sh
