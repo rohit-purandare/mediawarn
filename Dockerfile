@@ -75,8 +75,8 @@ WORKDIR /app
 COPY --from=go-build /app/api/api /app/api
 COPY --from=go-build /app/scanner/scanner /app/scanner
 
-# Copy installed Python packages from builder stage
-COPY --from=python-builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+# Copy entire Python environment from builder stage for reliability
+COPY --from=python-builder /usr/local /usr/local
 
 # Copy NLP application code
 COPY nlp/app/ /app/nlp/app/
@@ -86,8 +86,8 @@ ENV PYTHONPATH="/app" \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-# Copy frontend build
-COPY --from=frontend-build /app/frontend/build /app/frontend/build
+# Copy frontend build to standard nginx location
+COPY --from=frontend-build /app/frontend/build /usr/share/nginx/html
 COPY frontend/nginx.conf /etc/nginx/nginx.conf
 
 # Create directories with proper permissions
@@ -100,7 +100,7 @@ RUN chmod +x /app/start.sh
 # Note: Running as root for nginx and system services
 
 # Expose all ports
-EXPOSE 7219 8000 8001 80
+EXPOSE 7219 8000 8001
 
 # Use exec form for better signal handling (industry standard)
 CMD ["/app/start.sh"]
