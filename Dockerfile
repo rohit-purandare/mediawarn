@@ -100,7 +100,7 @@ RUN chmod +x /app/start.sh
 # Note: Running as root for nginx and system services
 
 # Expose all ports
-EXPOSE 7219 8000 8001 80
+EXPOSE 7219 8000 8001
 
 # Use exec form for better signal handling (industry standard)
 CMD ["/app/start.sh"]
