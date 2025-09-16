@@ -13,6 +13,11 @@ services:
       - NLP_WORKERS=2
       - PORT=8000
       - REACT_APP_API_URL=http://localhost:8000
+      # Logging configuration (industry standard)
+      - LOG_LEVEL=INFO
+      - NODE_ENV=production
+      - GIN_MODE=release
+      - APP_VERSION=1.0.0
     volumes:
       - ./data:/data                    # Auto-created by Docker Compose
       - ./config:/app/config:ro         # Auto-created by Docker Compose
@@ -22,7 +27,7 @@ services:
     ports:
       - "7219:7219"
       - "8000:8000"
-      - "8001:8001"
+      - "8002:8001"
     depends_on:
       postgres:
         condition: service_healthy
@@ -47,7 +52,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
       # Note: Database will be initialized by the application
     ports:
-      - "5432:5432"
+      - "5433:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U cws"]
       interval: 10s
@@ -62,7 +67,7 @@ services:
     volumes:
       - redis_data:/data
     ports:
-      - "6379:6379"
+      - "6380:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s

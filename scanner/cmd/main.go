@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"log"
 	"os"
 	"os/signal"
 	"syscall"
@@ -10,28 +9,49 @@ import (
 
 	"scanner/internal/config"
 	"scanner/internal/database"
+	"scanner/internal/logger"
 	"scanner/internal/queue"
 	"scanner/internal/scanner"
 )
 
 func main() {
+	// Log startup
+	version := os.Getenv("APP_VERSION")
+	if version == "" {
+		version = "dev"
+	}
+
 	// Load configuration
 	cfg, err := config.Load()
 	if err != nil {
-		log.Fatalf("Failed to load configuration: %v", err)
+		logger.WithError(err).Fatal("Failed to load configuration")
 	}
+
+	// Log startup configuration (without sensitive data)
+	configLog := map[string]interface{}{
+		"database_host":   extractHost(cfg.DatabaseURL),
+		"redis_host":      extractHost(cfg.RedisURL),
+		"scan_interval":   cfg.ScanInterval,
+		"concurrent_scans": cfg.ConcurrentScans,
+		"log_level":       os.Getenv("LOG_LEVEL"),
+	}
+	logger.LogStartup("scanner", version, configLog)
 
 	// Initialize database
+	start := time.Now()
 	db, err := database.Initialize(cfg.DatabaseURL)
 	if err != nil {
-		log.Fatalf("Failed to initialize database: %v", err)
+		logger.WithError(err).Fatal("Failed to initialize database")
 	}
+	logger.WithField("duration_ms", time.Since(start).Milliseconds()).Info("Database connection established")
 
 	// Initialize Redis queue
+	start = time.Now()
 	redisClient, err := queue.Initialize(cfg.RedisURL)
 	if err != nil {
-		log.Fatalf("Failed to initialize Redis: %v", err)
+		logger.WithError(err).Fatal("Failed to initialize Redis")
 	}
+	logger.WithField("duration_ms", time.Since(start).Milliseconds()).Info("Redis connection established")
 
 	// Initialize scanner
 	scannerService := scanner.NewService(db, redisClient, cfg)
@@ -43,7 +63,7 @@ func main() {
 	// Start scanner in a goroutine
 	go func() {
 		if err := scannerService.Start(ctx); err != nil {
-			log.Printf("Scanner error: %v", err)
+			logger.WithError(err).Error("Scanner service error")
 		}
 	}()
 
@@ -51,13 +71,22 @@ func main() {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-	log.Println("Scanner service started. Press Ctrl+C to exit.")
+	logger.Info("Scanner service started successfully")
 	<-sigChan
 
-	log.Println("Shutting down scanner service...")
+	logger.LogShutdown("scanner", "user_interrupt")
 	cancel()
 
 	// Give some time for cleanup
 	time.Sleep(2 * time.Second)
-	log.Println("Scanner service stopped.")
+	logger.Info("Scanner service stopped")
+}
+
+// extractHost extracts host from connection string for logging (removes credentials)
+func extractHost(connStr string) string {
+	// Simple extraction for logging - remove credentials
+	if len(connStr) > 20 {
+		return connStr[len(connStr)-20:]
+	}
+	return "localhost"
 }

@@ -8,14 +8,35 @@ RUN apk add --no-cache python3 make g++
 
 WORKDIR /app/frontend
 
-# Copy package.json and try to install (fallback to npm install if ci fails)
+# Copy package.json and install dependencies with comprehensive logging
 COPY frontend/package*.json ./
-RUN npm install || npm ci || echo "npm install failed, using fallback"
+RUN echo "=== Frontend Build - Installing Dependencies ===" && \
+    echo "Node version: $(node --version)" && \
+    echo "NPM version: $(npm --version)" && \
+    echo "Package.json contents:" && \
+    cat package.json && \
+    echo "=== Running npm install ===" && \
+    npm install --verbose --no-audit --prefer-offline || \
+    (echo "ERROR: npm install failed" && cat /root/.npm/_logs/*.log 2>/dev/null || echo "No npm logs found" && exit 1)
 
-# Copy source and build with fallback
+# Copy source and build with comprehensive error handling
 COPY frontend/ .
 ENV NODE_ENV=production GENERATE_SOURCEMAP=false CI=false
-RUN npm run build 2>/dev/null || (mkdir -p build && echo '<!DOCTYPE html><html><head><title>MediaWarn Frontend</title><style>body{font-family:Arial;text-align:center;padding:50px}</style></head><body><h1>🛡️ MediaWarn</h1><p>Content Warning Scanner</p><p>Frontend temporarily unavailable</p></body></html>' > build/index.html)
+RUN echo "=== Frontend Build - Starting React Build ===" && \
+    echo "Current directory: $(pwd)" && \
+    echo "Directory contents:" && \
+    ls -la && \
+    echo "=== Starting npm run build ===" && \
+    npm run build 2>&1 | tee build.log || \
+    (echo "=== BUILD FAILED - Error Details ===" && \
+     cat build.log 2>/dev/null || echo "No build log found" && \
+     echo "Creating fallback HTML..." && \
+     mkdir -p build && \
+     echo '<!DOCTYPE html><html><head><title>MediaWarn Frontend</title><style>body{font-family:Arial;text-align:center;padding:50px}</style></head><body><h1>🛡️ MediaWarn</h1><p>Content Warning Scanner</p><p>Frontend build failed - check logs</p></body></html>' > build/index.html && \
+     echo "=== Fallback HTML created ===") && \
+    echo "=== Build directory contents ===" && \
+    ls -la build/ 2>/dev/null || echo "Build directory not found" && \
+    echo "=== Frontend Build Complete ==="
 
 # Go services build stage
 FROM golang:1.21-alpine as go-build

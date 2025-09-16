@@ -1,17 +1,20 @@
 package main
 
 import (
-	"log"
 	"os"
+	"time"
 
 	"api/handlers"
+	"api/logger"
 	"api/middleware"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
+	"github.com/sirupsen/logrus"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	gormlogger "gorm.io/gorm/logger"
 )
 
 type File struct {
@@ -102,7 +105,18 @@ type ModelCategory struct {
 }
 
 func main() {
-	// Get database and Redis URLs from environment
+	// Log startup
+	version := os.Getenv("APP_VERSION")
+	if version == "" {
+		version = "dev"
+	}
+
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8000"
+	}
+
+	// Get configuration from environment
 	databaseURL := os.Getenv("DATABASE_URL")
 	if databaseURL == "" {
 		databaseURL = "postgresql://cws:password@localhost:5432/cws"
@@ -113,39 +127,77 @@ func main() {
 		redisURL = "redis://localhost:6379"
 	}
 
-	// Initialize database connection
-	db, err := gorm.Open(postgres.Open(databaseURL), &gorm.Config{})
-	if err != nil {
-		log.Fatalf("Failed to connect to database: %v", err)
+	// Log startup configuration (without sensitive data)
+	config := map[string]interface{}{
+		"database_host": extractHost(databaseURL),
+		"redis_host":    extractHost(redisURL),
+		"gin_mode":      os.Getenv("GIN_MODE"),
+		"log_level":     os.Getenv("LOG_LEVEL"),
+	}
+	logger.LogStartup("api", version, port, config)
+
+	// Initialize database connection with structured logging
+	start := time.Now()
+	dbConfig := &gorm.Config{
+		Logger: gormlogger.New(
+			&GormLogrusWriter{},
+			gormlogger.Config{
+				SlowThreshold:             time.Second,
+				LogLevel:                 gormlogger.Info,
+				IgnoreRecordNotFoundError: true,
+				Colorful:                 false,
+			},
+		),
 	}
 
+	db, err := gorm.Open(postgres.Open(databaseURL), dbConfig)
+	if err != nil {
+		logger.WithError(err).Fatal("Failed to connect to database")
+	}
+	logger.WithField("duration_ms", time.Since(start).Milliseconds()).Info("Database connection established")
+
 	// Auto migrate the schema
-	db.AutoMigrate(&File{}, &ScanResult{}, &Trigger{}, &UserPreference{}, &ScanFolder{}, &NLPModel{}, &ModelCategory{})
+	start = time.Now()
+	err = db.AutoMigrate(&File{}, &ScanResult{}, &Trigger{}, &UserPreference{}, &ScanFolder{}, &NLPModel{}, &ModelCategory{})
+	if err != nil {
+		logger.WithError(err).Fatal("Database migration failed")
+	}
+	logger.WithField("duration_ms", time.Since(start).Milliseconds()).Info("Database migration completed")
 
 	// Initialize Redis connection
+	start = time.Now()
 	opt, err := redis.ParseURL(redisURL)
 	if err != nil {
-		log.Fatalf("Failed to parse Redis URL: %v", err)
+		logger.WithError(err).Fatal("Failed to parse Redis URL")
 	}
 	rdb := redis.NewClient(opt)
 
 	// Test Redis connection
 	if err := rdb.Ping(rdb.Context()).Err(); err != nil {
-		log.Fatalf("Failed to connect to Redis: %v", err)
+		logger.WithError(err).Fatal("Failed to connect to Redis")
 	}
+	logger.WithField("duration_ms", time.Since(start).Milliseconds()).Info("Redis connection established")
 
 	// Set up Gin
-	if os.Getenv("GIN_MODE") == "release" {
+	ginMode := os.Getenv("GIN_MODE")
+	if ginMode == "release" {
 		gin.SetMode(gin.ReleaseMode)
+		// Disable Gin's default logging in production
+		gin.DefaultWriter = &ginLogrusWriter{}
 	}
 
-	r := gin.Default()
+	r := gin.New() // Use gin.New() instead of gin.Default() for custom logging
+
+	// Add structured logging middleware
+	r.Use(middleware.RequestID())
+	r.Use(middleware.RequestLogging())
+	r.Use(middleware.ErrorLogging())
 
 	// Configure CORS
 	config := cors.DefaultConfig()
 	config.AllowOrigins = []string{"http://localhost:7219", "http://frontend:7219"}
 	config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
-	config.AllowHeaders = []string{"Origin", "Content-Type", "Authorization"}
+	config.AllowHeaders = []string{"Origin", "Content-Type", "Authorization", "X-Request-ID"}
 	r.Use(cors.New(config))
 
 	// Add middleware
@@ -218,13 +270,34 @@ func main() {
 		}
 	}
 
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8000"
-	}
-
-	log.Printf("Starting API server on port %s", port)
+	logger.WithField("port", port).Info("Starting API server")
 	if err := r.Run(":" + port); err != nil {
-		log.Fatalf("Failed to start server: %v", err)
+		logger.WithError(err).Fatal("Failed to start server")
 	}
+}
+
+// Helper functions for logging integration
+
+// extractHost extracts host from connection string for logging (removes credentials)
+func extractHost(connStr string) string {
+	// Simple extraction for logging - remove credentials
+	if len(connStr) > 20 {
+		return connStr[len(connStr)-20:]
+	}
+	return "localhost"
+}
+
+// GormLogrusWriter adapts Gorm logging to logrus
+type GormLogrusWriter struct{}
+
+func (w *GormLogrusWriter) Printf(format string, v ...interface{}) {
+	logger.WithField("type", "gorm").Infof(format, v...)
+}
+
+// ginLogrusWriter adapts Gin logging to logrus
+type ginLogrusWriter struct{}
+
+func (w *ginLogrusWriter) Write(p []byte) (n int, err error) {
+	logger.WithField("type", "gin").Info(string(p))
+	return len(p), nil
 }
