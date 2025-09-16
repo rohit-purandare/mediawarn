@@ -1,8 +1,6 @@
 package middleware
 
 import (
-	"time"
-
 	"api/logger"
 
 	"github.com/gin-gonic/gin"

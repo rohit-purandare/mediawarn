@@ -29,11 +29,11 @@ func main() {
 
 	// Log startup configuration (without sensitive data)
 	configLog := map[string]interface{}{
-		"database_host":   extractHost(cfg.DatabaseURL),
-		"redis_host":      extractHost(cfg.RedisURL),
-		"scan_interval":   cfg.ScanInterval,
-		"concurrent_scans": cfg.ConcurrentScans,
-		"log_level":       os.Getenv("LOG_LEVEL"),
+		"database_host": extractHost(cfg.DatabaseURL),
+		"redis_host":    extractHost(cfg.RedisURL),
+		"scan_interval": cfg.ScanInterval,
+		"workers":       cfg.Workers,
+		"log_level":     os.Getenv("LOG_LEVEL"),
 	}
 	logger.LogStartup("scanner", version, configLog)
 
@@ -71,7 +71,7 @@ func main() {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-	logger.Info("Scanner service started successfully")
+	logger.WithField("service", "scanner").Info("Scanner service started successfully")
 	<-sigChan
 
 	logger.LogShutdown("scanner", "user_interrupt")
@@ -79,7 +79,7 @@ func main() {
 
 	// Give some time for cleanup
 	time.Sleep(2 * time.Second)
-	logger.Info("Scanner service stopped")
+	logger.WithField("service", "scanner").Info("Scanner service stopped")
 }
 
 // extractHost extracts host from connection string for logging (removes credentials)
