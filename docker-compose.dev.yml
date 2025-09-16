@@ -1,62 +1,81 @@
-# Development Docker Compose - Use existing PostgreSQL and Redis
 version: '3.8'
 
+# Development compose file that builds from source
+# Usage: docker-compose -f docker-compose.dev.yml up
+
 services:
-  scanner:
-    build: ./scanner
-    container_name: cws-scanner-dev
+  mediawarn:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mediawarn-dev
+    environment:
+      - SERVICE=all
+      - DATABASE_URL=postgresql://cws:password@postgres:5432/cws
+      - REDIS_URL=redis://redis:6379
+      - SCAN_INTERVAL=300
+      - WORKERS=4
+      - NLP_WORKERS=2
+      - PORT=8000
+      - REACT_APP_API_URL=http://localhost:8000
     volumes:
-      - ./data:/data
-      - ./config:/config
+      - ./data:/data                    # Auto-created by Docker Compose
+      - ./config:/app/config:ro         # Auto-created by Docker Compose
+      - nlp_models:/models              # Named volume (auto-created)
       # Mount your media directories here, e.g.:
       # - /path/to/your/media:/media:ro
-    environment:
-      - REDIS_URL=${REDIS_URL:-redis://host.docker.internal:6379}
-      - DATABASE_URL=${DATABASE_URL:-postgresql://cws:password@host.docker.internal:5432/cws}
-      - SCAN_INTERVAL=${SCAN_INTERVAL:-300}
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    restart: unless-stopped
-    network_mode: bridge
-
-  nlp-worker:
-    build: ./nlp
-    container_name: cws-nlp-dev
-    deploy:
-      replicas: ${NLP_WORKERS:-2}
-    environment:
-      - REDIS_URL=${REDIS_URL:-redis://host.docker.internal:6379}
-      - DATABASE_URL=${DATABASE_URL:-postgresql://cws:password@host.docker.internal:5432/cws}
-      - MODEL_CACHE=/models
-      - CUDA_VISIBLE_DEVICES=${GPU_DEVICES:-}
-    volumes:
-      - ./nlp/models:/models
-      - ./data:/data:ro
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    restart: unless-stopped
-    network_mode: bridge
-
-  frontend:
-    build: ./frontend
-    container_name: cws-frontend-dev
     ports:
       - "7219:7219"
-    environment:
-      - REACT_APP_API_URL=http://localhost:8000
+      - "8000:8000"
+      - "8001:8001"
     depends_on:
-      - api
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7219", "||", "exit", "1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
     restart: unless-stopped
 
-  api:
-    build: ./api
-    container_name: cws-api-dev
-    ports:
-      - "8000:8000"
+  postgres:
+    image: postgres:15-alpine
+    container_name: cws-postgres-dev
     environment:
-      - DATABASE_URL=${DATABASE_URL:-postgresql://cws:password@host.docker.internal:5432/cws}
-      - REDIS_URL=${REDIS_URL:-redis://host.docker.internal:6379}
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - POSTGRES_DB=cws
+      - POSTGRES_USER=cws
+      - POSTGRES_PASSWORD=password
+    volumes:
+      - postgres_data_dev:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cws"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     restart: unless-stopped
-    network_mode: bridge
+
+  redis:
+    image: redis:7-alpine
+    container_name: cws-redis-dev
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data_dev:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  postgres_data_dev:
+  redis_data_dev:
+  nlp_models:

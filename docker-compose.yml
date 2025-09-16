@@ -2,9 +2,7 @@ version: '3.8'
 
 services:
   mediawarn:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ghcr.io/rohit-purandare/mediawarn:latest
     container_name: mediawarn
     environment:
       - SERVICE=all
@@ -16,9 +14,9 @@ services:
       - PORT=8000
       - REACT_APP_API_URL=http://localhost:8000
     volumes:
-      - ./data:/data
-      - ./config:/app/config:ro
-      - nlp_models:/models
+      - ./data:/data                    # Auto-created by Docker Compose
+      - ./config:/app/config:ro         # Auto-created by Docker Compose
+      - nlp_models:/models              # Named volume (auto-created)
       # Mount your media directories here, e.g.:
       # - /path/to/your/media:/media:ro
     ports:
@@ -47,7 +45,7 @@ services:
       - POSTGRES_PASSWORD=password
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+      # Note: Database will be initialized by the application
     ports:
       - "5432:5432"
     healthcheck:
