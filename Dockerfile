@@ -22,21 +22,29 @@ RUN echo "=== Frontend Build - Installing Dependencies ===" && \
 # Copy source and build with comprehensive error handling
 COPY frontend/ .
 ENV NODE_ENV=production GENERATE_SOURCEMAP=false CI=false
+# Ensure build directory exists before starting
+RUN mkdir -p build
+
+# Build React app with comprehensive error handling
 RUN echo "=== Frontend Build - Starting React Build ===" && \
     echo "Current directory: $(pwd)" && \
     echo "Directory contents:" && \
     ls -la && \
     echo "=== Starting npm run build ===" && \
-    npm run build 2>&1 | tee build.log || \
-    (echo "=== BUILD FAILED - Error Details ===" && \
-     cat build.log 2>/dev/null || echo "No build log found" && \
-     echo "Creating fallback HTML..." && \
-     mkdir -p build && \
-     echo '<!DOCTYPE html><html><head><title>MediaWarn Frontend</title><style>body{font-family:Arial;text-align:center;padding:50px}</style></head><body><h1>🛡️ MediaWarn</h1><p>Content Warning Scanner</p><p>Frontend build failed - check logs</p></body></html>' > build/index.html && \
-     echo "=== Fallback HTML created ===") && \
-    echo "=== Build directory contents ===" && \
-    ls -la build/ 2>/dev/null || echo "Build directory not found" && \
-    echo "=== Frontend Build Complete ==="
+    if npm run build 2>&1 | tee build.log; then \
+        echo "=== BUILD SUCCESSFUL ===" && \
+        echo "Build directory contents:" && \
+        ls -la build/; \
+    else \
+        echo "=== BUILD FAILED - Error Details ===" && \
+        cat build.log 2>/dev/null || echo "No build log found" && \
+        echo "Creating fallback HTML..." && \
+        echo '<!DOCTYPE html><html><head><title>MediaWarn Frontend</title><style>body{font-family:Arial;text-align:center;padding:50px}</style></head><body><h1>🛡️ MediaWarn</h1><p>Content Warning Scanner</p><p>Frontend build failed - check logs above</p></body></html>' > build/index.html && \
+        echo "=== Fallback HTML created ==="; \
+    fi && \
+    echo "=== Final build directory contents ===" && \
+    ls -la build/ && \
+    echo "=== Frontend Build Stage Complete ==="
 
 # Go services build stage
 FROM golang:1.21-alpine as go-build
