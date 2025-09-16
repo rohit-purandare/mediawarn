@@ -10,6 +10,10 @@ echo "Starting MediaWarn services with SERVICE=${SERVICE}"
 # Default to all services if not specified
 SERVICE=${SERVICE:-all}
 
+# Ensure required directories exist
+mkdir -p /data /models /app/config
+echo "Required directories verified"
+
 # Function to wait for database connection
 wait_for_db() {
     echo "Waiting for database connection..."
