@@ -1,7 +1,7 @@
 # Multi-stage build for unified MediaWarn services
 
 # Frontend build stage - simplified approach
-FROM node:18-alpine as frontend-build
+FROM node:24-alpine as frontend-build
 
 # Install build dependencies
 RUN apk add --no-cache python3 make g++
