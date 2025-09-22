@@ -70,7 +70,7 @@ COPY scanner/ .
 RUN go build -ldflags="-w -s" -o scanner ./cmd/main.go
 
 # Python NLP build stage (official PyTorch image - industry standard)
-FROM python:3.11-slim as python-builder
+FROM python:3.13-slim as python-builder
 
 # Install system dependencies needed for other packages
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -90,7 +90,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN python -c "import torch; import transformers; print(f'PyTorch {torch.__version__}, Transformers ready')"
 
 # Final runtime stage - use same Python base for simplicity
-FROM python:3.11-slim
+FROM python:3.13-slim
 
 # Install only essential runtime dependencies (no build tools)
 RUN apt-get update && apt-get install -y --no-install-recommends \
