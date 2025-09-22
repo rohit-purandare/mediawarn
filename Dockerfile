@@ -47,7 +47,7 @@ RUN echo "=== Frontend Build - Starting React Build ===" && \
     echo "=== Frontend Build Stage Complete ==="
 
 # Go services build stage
-FROM golang:1.21-alpine as go-build
+FROM golang:1.25-alpine as go-build
 RUN apk add --no-cache git ca-certificates
 
 ENV CGO_ENABLED=0 GOOS=linux
