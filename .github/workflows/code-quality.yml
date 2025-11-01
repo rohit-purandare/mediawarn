@@ -70,7 +70,7 @@ jobs:
     
     - name: Upload bandit report
       if: always()
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: bandit-report
         path: nlp/bandit-report.json
@@ -219,7 +219,7 @@ jobs:
         pip-check > pip-updates.txt || true
     
     - name: Upload update reports
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: dependency-updates
         path: |
