@@ -212,7 +212,7 @@ jobs:
       uses: docker/setup-buildx-action@v3
     
     - name: Build Scanner Image
-      uses: docker/build-push-action@v5
+      uses: docker/build-push-action@v6
       with:
         context: ./scanner
         push: false
@@ -221,7 +221,7 @@ jobs:
         cache-to: type=gha,mode=max
     
     - name: Build NLP Image
-      uses: docker/build-push-action@v5
+      uses: docker/build-push-action@v6
       with:
         context: ./nlp
         push: false
@@ -230,7 +230,7 @@ jobs:
         cache-to: type=gha,mode=max
     
     - name: Build API Image
-      uses: docker/build-push-action@v5
+      uses: docker/build-push-action@v6
       with:
         context: ./api
         push: false
@@ -239,7 +239,7 @@ jobs:
         cache-to: type=gha,mode=max
     
     - name: Build Frontend Image
-      uses: docker/build-push-action@v5
+      uses: docker/build-push-action@v6
       with:
         context: ./frontend
         push: false
